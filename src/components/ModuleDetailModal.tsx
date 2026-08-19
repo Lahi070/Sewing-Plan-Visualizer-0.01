@@ -26,12 +26,14 @@ export function ModuleDetailModal({ moduleSummary, onClose }: ModuleDetailModalP
 
   // 2. Trims Side Data: Count of SO_LIs OK vs NO / Pending
   const trimsOk = moduleSummary.trimsOkCount;
-  const trimsTotal = moduleSummary.trimsTotalCount;
+  const trimsTotal = moduleSummary.totalItems || moduleSummary.trimsTotalCount;
   const trimsPending = Math.max(0, trimsTotal - trimsOk);
 
-  const trimsChartData = [
+  const trimsChartData = trimsTotal > 0 ? [
     { name: 'Trims Ready (OK)', value: trimsOk, color: '#0ea5e9' },
-    { name: 'Trims Pending / NO', value: trimsPending, color: '#fed7aa' },
+    { name: 'Trims Pending / Missing', value: trimsPending, color: '#fed7aa' },
+  ] : [
+    { name: 'No Trims Data', value: 1, color: '#e2e8f0' },
   ];
 
   const CustomPieTooltip = ({ active, payload }: any) => {

@@ -223,11 +223,9 @@ export function evaluateReadiness(
     m.knitCompletedQty += Math.min(item.knitSmWip, item.qtyNeeded);
     m.knitTotalNeededQty += item.qtyNeeded;
 
-    if (item.trimsFound) {
-      m.trimsTotalCount += 1;
-      if (item.trimsStatus === 'OK' && !item.trimsPedDelayed) {
-        m.trimsOkCount += 1;
-      }
+    m.trimsTotalCount += 1;
+    if (item.trimsFound && item.trimsStatus === 'OK' && !item.trimsPedDelayed) {
+      m.trimsOkCount += 1;
     }
   }
 
