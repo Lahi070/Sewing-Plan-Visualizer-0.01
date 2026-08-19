@@ -438,7 +438,7 @@ export function ReadinessTable({
                             }`}
                           >
                             <span>
-                              {formatNumber(item.knitSmWip)} / {formatNumber(item.qtyNeeded)}
+                              {formatNumber(item.qtyNeeded)} / {formatNumber(item.knitSmWip)}
                             </span>
                           </span>
                           <span className="block text-[10px] text-slate-500 mt-0.5">

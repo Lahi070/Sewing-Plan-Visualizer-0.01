@@ -105,7 +105,7 @@ export function evaluateReadiness(
       noDataCount++;
     } else if (knitReady && trimsReady) {
       overallStatus = 'READY';
-      statusReason = `Ready: Knit (${knitSmWip}/${sew.qty} pcs) & Trims OK`;
+      statusReason = `Ready: Knit (${sew.qty}/${knitSmWip} pcs) & Trims OK`;
       readyCount++;
     } else if (diffDays <= 0) {
       overallStatus = 'NOT_READY';
@@ -249,7 +249,7 @@ function buildIssueReason(
 ): string {
   const issues: string[] = [];
   if (!knitReady) {
-    issues.push(`Knit short (${knitWip}/${qtyNeeded} pcs)`);
+    issues.push(`Knit short (${qtyNeeded}/${knitWip} pcs)`);
   }
   if (!trimsReady) {
     if (trimsStatus !== 'OK') {

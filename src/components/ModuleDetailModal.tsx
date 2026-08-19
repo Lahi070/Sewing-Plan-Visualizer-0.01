@@ -236,7 +236,7 @@ export function ModuleDetailModal({ moduleSummary, onClose }: ModuleDetailModalP
                               <span className={`inline-flex items-center px-2 py-0.5 rounded font-mono font-semibold text-[11px] ${
                                 item.knitReady ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
                               }`}>
-                                {formatNumber(item.knitSmWip)} / {formatNumber(item.qtyNeeded)}
+                                {formatNumber(item.qtyNeeded)} / {formatNumber(item.knitSmWip)}
                               </span>
                             ) : (
                               <span className="text-gray-400 font-mono text-[11px]">No Knit</span>
