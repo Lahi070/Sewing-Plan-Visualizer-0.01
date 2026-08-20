@@ -30,8 +30,8 @@ export function ModuleDetailModal({ moduleSummary, onClose }: ModuleDetailModalP
   const trimsPending = Math.max(0, trimsTotal - trimsOk);
 
   const trimsChartData = trimsTotal > 0 ? [
-    { name: 'Trims Ready (OK)', value: trimsOk, color: '#0ea5e9' },
-    { name: 'Trims Pending / Missing', value: trimsPending, color: '#451a03' },
+    { name: 'Trims Ready (OK)', value: trimsOk, color: '#2563eb' },
+    { name: 'Trims Pending / Missing', value: trimsPending, color: '#38bdf8' },
   ] : [
     { name: 'No Trims Data', value: 1, color: '#1E293B' },
   ];
