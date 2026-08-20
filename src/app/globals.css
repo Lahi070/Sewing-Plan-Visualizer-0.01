@@ -3,37 +3,59 @@
 @tailwind utilities;
 
 @layer base {
-  :root {
-    --background: 210 40% 98%;
-    --foreground: 222.2 84% 4.9%;
-  }
-
   body {
-    @apply bg-slate-50 text-slate-900 antialiased selection:bg-emerald-500 selection:text-white;
+    @apply bg-navy-950 text-slate-100 antialiased selection:bg-cyan-500 selection:text-white;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    background-color: #060B18;
+    background-image: 
+      radial-gradient(at 0% 0%, rgba(30, 58, 138, 0.15) 0px, transparent 50%),
+      radial-gradient(at 100% 100%, rgba(15, 23, 42, 0.4) 0px, transparent 50%),
+      linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+    background-size: 100% 100%, 100% 100%, 24px 24px, 24px 24px;
+    background-attachment: fixed;
   }
 }
 
-/* Custom subtle scrollbars */
+/* Fabric Stitch Border helper */
+.fabric-border {
+  border: 1px dashed rgba(59, 130, 246, 0.25);
+}
+
+.fabric-card {
+  background: linear-gradient(135deg, rgba(16, 27, 59, 0.85) 0%, rgba(11, 19, 43, 0.95) 100%);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(35, 54, 112, 0.6);
+}
+
+.fabric-card-hover {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.fabric-card-hover:hover {
+  border-color: rgba(59, 130, 246, 0.5);
+  box-shadow: 0 0 25px -5px rgba(30, 58, 138, 0.4);
+}
+
+/* Custom dark sleek scrollbars */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #f1f5f9;
+  background: #0B132B;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: #1C2C5E;
   border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: #3B82F6;
 }
 
-/* Printing styles */
+/* Printing styles - preserve ink on paper */
 @media print {
   body {
     background: white !important;

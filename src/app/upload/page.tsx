@@ -318,39 +318,39 @@ export default function AdminUploadPage() {
   // Password Lock Screen
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-4 bg-slate-100">
-        <div className="max-w-md w-full bg-white rounded-3xl border border-slate-200 p-8 shadow-xl">
+      <div className="min-h-screen flex items-center justify-center p-4 bg-navy-950 text-slate-100 selection:bg-cyan-500 selection:text-white">
+        <div className="max-w-md w-full bg-gradient-to-br from-navy-850 to-navy-900 rounded-3xl border border-navy-700/80 p-8 shadow-2xl shadow-navy-950/60 backdrop-blur-md">
           <div className="flex flex-col items-center text-center">
-            <div className="w-14 h-14 rounded-2xl bg-slate-900 text-white flex items-center justify-center shadow-lg shadow-slate-900/20 mb-4">
-              <Lock className="w-7 h-7 text-emerald-400" />
+            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-600 to-navy-800 border border-blue-400/30 text-white flex items-center justify-center shadow-lg shadow-blue-600/30 mb-4">
+              <Lock className="w-7 h-7 text-cyan-300" />
             </div>
-            <h1 className="text-xl font-extrabold text-slate-900">Admin Upload Access</h1>
-            <p className="text-xs text-slate-500 mt-1 max-w-xs">
+            <h1 className="text-xl font-extrabold text-white">Admin Upload Access</h1>
+            <p className="text-xs text-slate-400 mt-1 max-w-xs">
               Enter the admin authorization password to upload and update sewing floor Excel records.
             </p>
           </div>
 
           <form onSubmit={handlePasswordSubmit} className="mt-6 space-y-4">
             <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+              <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
                 Admin Password
               </label>
               <div className="relative">
-                <KeyRound className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                <KeyRound className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" />
                 <input
                   type="password"
                   value={passwordInput}
                   onChange={(e) => setPasswordInput(e.target.value)}
                   placeholder="Enter admin password..."
                   required
-                  className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:bg-white"
+                  className="w-full pl-10 pr-4 py-2.5 bg-navy-950/80 border border-navy-700/80 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500"
                 />
               </div>
             </div>
 
             {authError && (
-              <div className="flex items-center space-x-2 text-xs text-rose-600 bg-rose-50 p-3 rounded-xl border border-rose-200">
-                <AlertCircle className="w-4 h-4 shrink-0" />
+              <div className="flex items-center space-x-2 text-xs text-rose-300 bg-rose-950/80 p-3 rounded-xl border border-rose-500/40">
+                <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
                 <span>{authError}</span>
               </div>
             )}
@@ -358,19 +358,19 @@ export default function AdminUploadPage() {
             <button
               type="submit"
               disabled={isVerifying}
-              className="w-full py-2.5 px-4 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow-md transition-all disabled:opacity-50 flex items-center justify-center space-x-2"
+              className="w-full py-2.5 px-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs rounded-xl shadow-md shadow-blue-600/30 transition-all disabled:opacity-50 flex items-center justify-center space-x-2 border border-blue-400/30"
             >
-              {isVerifying && <RefreshCw className="w-4 h-4 animate-spin text-emerald-400" />}
+              {isVerifying && <RefreshCw className="w-4 h-4 animate-spin text-cyan-200" />}
               <span>{isVerifying ? 'Verifying...' : 'Unlock Upload Center'}</span>
             </button>
           </form>
 
-          <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between text-xs">
-            <Link href="/" className="inline-flex items-center space-x-1.5 text-slate-600 hover:text-slate-900 font-medium">
+          <div className="mt-6 pt-4 border-t border-navy-700/60 flex items-center justify-between text-xs">
+            <Link href="/" className="inline-flex items-center space-x-1.5 text-slate-400 hover:text-white font-medium">
               <ArrowLeft className="w-3.5 h-3.5" />
               <span>Back to Floor Dashboard</span>
             </Link>
-            <span className="text-[11px] text-slate-400">Public viewing requires no login</span>
+            <span className="text-[11px] text-slate-500">Public floor requires no login</span>
           </div>
         </div>
       </div>
@@ -380,19 +380,19 @@ export default function AdminUploadPage() {
   const hasAnyStaged = Boolean(stagedSewing || stagedKnitting || stagedTrims);
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col">
+    <div className="min-h-screen bg-navy-950 text-slate-100 flex flex-col selection:bg-cyan-500 selection:text-white">
       {/* Top Header */}
-      <header className="border-b border-slate-200 bg-white shadow-2xs">
+      <header className="border-b border-navy-700/80 bg-navy-950/90 shadow-lg shadow-navy-950/50 backdrop-blur-md">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center space-x-3">
             <Link
               href="/"
-              className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-100 transition-colors"
+              className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl border border-navy-700/80 bg-navy-900 text-xs font-semibold text-slate-300 hover:text-white hover:bg-navy-800 transition-colors"
             >
-              <ArrowLeft className="w-4 h-4" />
+              <ArrowLeft className="w-4 h-4 text-cyan-400" />
               <span>Back to Dashboard</span>
             </Link>
-            <h1 className="text-base font-bold text-slate-900 hidden sm:block">
+            <h1 className="text-base font-bold text-white hidden sm:block">
               Admin Excel Ingestion Portal
             </h1>
           </div>
@@ -400,9 +400,9 @@ export default function AdminUploadPage() {
           <div className="flex items-center space-x-3">
             <button
               onClick={handleResetToFactoryData}
-              className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors"
+              className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl border border-navy-700/80 bg-navy-900 text-xs font-medium text-slate-300 hover:text-white hover:bg-navy-800 transition-colors"
             >
-              <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
               <span>Reset Factory Sample Data</span>
             </button>
             <button
@@ -410,7 +410,7 @@ export default function AdminUploadPage() {
                 setIsAuthenticated(false);
                 sessionStorage.removeItem('sewing_admin_authenticated');
               }}
-              className="text-xs text-rose-600 hover:text-rose-800 font-semibold px-2 py-1"
+              className="text-xs text-rose-400 hover:text-rose-300 font-semibold px-2 py-1"
             >
               Lock / Exit
             </button>
@@ -421,16 +421,16 @@ export default function AdminUploadPage() {
       {/* Main Content */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
         {/* Banner */}
-        <div className="rounded-3xl border border-slate-200 bg-white p-6 sm:p-8 shadow-xs">
+        <div className="rounded-3xl border border-navy-700/80 bg-gradient-to-br from-navy-850 to-navy-900 p-6 sm:p-8 shadow-xl shadow-navy-950/40 backdrop-blur-md">
           <div className="flex items-start space-x-4">
-            <div className="w-12 h-12 rounded-2xl bg-slate-900 text-white flex items-center justify-center shrink-0 shadow-md shadow-slate-900/10">
-              <UploadCloud className="w-6 h-6 text-emerald-400" />
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-600 to-navy-800 border border-blue-400/30 text-white flex items-center justify-center shrink-0 shadow-lg shadow-blue-600/30">
+              <UploadCloud className="w-6 h-6 text-cyan-300" />
             </div>
             <div>
-              <h2 className="text-xl font-extrabold text-slate-900 tracking-tight">
+              <h2 className="text-xl font-extrabold text-white tracking-tight">
                 Upload & Cross-Reference Factory Datasets
               </h2>
-              <p className="text-xs text-slate-600 mt-1 leading-relaxed max-w-3xl">
+              <p className="text-xs text-slate-400 mt-1 leading-relaxed max-w-3xl">
                 Upload whenever you have a new version of any file. Excel parsing is performed client-side in your browser,
                 automatically formatting join keys (`SO_LI`), filtering text dash rows, and synchronizing to Supabase so all
                 floor personnel see the latest readiness status instantly.
@@ -444,14 +444,14 @@ export default function AdminUploadPage() {
           <div
             className={`p-4 rounded-2xl border flex items-center space-x-3 text-xs font-semibold ${
               syncStatus.type === 'success'
-                ? 'bg-emerald-50 text-emerald-900 border-emerald-300'
-                : 'bg-rose-50 text-rose-900 border-rose-300'
+                ? 'bg-emerald-950/80 text-emerald-300 border-emerald-500/40 shadow-emerald-glow'
+                : 'bg-rose-950/80 text-rose-300 border-rose-500/40 shadow-rose-glow'
             }`}
           >
             {syncStatus.type === 'success' ? (
-              <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+              <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
             ) : (
-              <AlertCircle className="w-5 h-5 text-rose-600 shrink-0" />
+              <AlertCircle className="w-5 h-5 text-rose-400 shrink-0" />
             )}
             <span>{syncStatus.message}</span>
           </div>
@@ -498,24 +498,24 @@ export default function AdminUploadPage() {
 
         {/* Staged Upload Verification Card */}
         {hasAnyStaged && (
-          <div className="rounded-3xl border-2 border-emerald-400 bg-emerald-50/40 p-6 sm:p-7 shadow-md space-y-4 animate-in fade-in duration-300">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-emerald-200 pb-4">
+          <div className="rounded-3xl border border-emerald-500/40 bg-gradient-to-br from-emerald-950/40 to-navy-900/90 p-6 sm:p-7 shadow-emerald-glow space-y-4 animate-in fade-in duration-300 backdrop-blur-md">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-emerald-500/30 pb-4">
               <div>
-                <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-emerald-200 text-emerald-900 uppercase tracking-wider">
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-950 text-emerald-300 border border-emerald-500/40 uppercase tracking-wider">
                   Ready to Synchronize
                 </span>
-                <h3 className="text-lg font-bold text-slate-900 mt-1">Staged Files Preview</h3>
+                <h3 className="text-lg font-bold text-white mt-1">Staged Files Preview</h3>
               </div>
 
               <button
                 onClick={handleCommitSync}
                 disabled={isSyncing}
-                className="inline-flex items-center justify-center space-x-2 px-6 py-2.5 rounded-xl bg-slate-900 text-white font-bold text-xs hover:bg-slate-800 shadow-md transition-all active:scale-95 disabled:opacity-50"
+                className="inline-flex items-center justify-center space-x-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 font-extrabold text-xs shadow-lg shadow-emerald-500/20 transition-all active:scale-95 disabled:opacity-50"
               >
                 {isSyncing ? (
-                  <RefreshCw className="w-4 h-4 animate-spin text-emerald-400" />
+                  <RefreshCw className="w-4 h-4 animate-spin text-slate-950" />
                 ) : (
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                  <CheckCircle2 className="w-4 h-4 text-slate-950" />
                 )}
                 <span>{isSyncing ? 'Synchronizing to Database...' : 'Save & Publish to Floor'}</span>
               </button>
@@ -523,61 +523,61 @@ export default function AdminUploadPage() {
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
               {/* Sewing Staged Info */}
-              <div className="bg-white p-4 rounded-2xl border border-slate-200">
-                <div className="flex items-center justify-between font-bold text-slate-900 mb-1">
+              <div className="bg-navy-900/80 p-4 rounded-2xl border border-navy-700/80">
+                <div className="flex items-center justify-between font-bold text-white mb-1">
                   <span>Sewing Plan</span>
-                  <span className="font-mono text-emerald-600">
+                  <span className="font-mono text-emerald-400">
                     {stagedSewing ? `${stagedSewing.rows.length} rows` : 'Unchanged'}
                   </span>
                 </div>
                 {stagedSewing ? (
-                  <div className="text-[11px] text-slate-500 space-y-0.5">
-                    <div>File: <span className="font-semibold text-slate-700">{stagedSewing.fileName}</span></div>
-                    <div>Sheet: <span className="font-mono font-medium text-slate-700">{stagedSewing.sheetUsed}</span></div>
-                    <div>Skipped '-' rows: <span className="font-mono text-amber-600">{stagedSewing.skippedCount}</span></div>
+                  <div className="text-[11px] text-slate-400 space-y-0.5">
+                    <div>File: <span className="font-semibold text-slate-200">{stagedSewing.fileName}</span></div>
+                    <div>Sheet: <span className="font-mono font-medium text-cyan-300">{stagedSewing.sheetUsed}</span></div>
+                    <div>Skipped '-' rows: <span className="font-mono text-amber-400">{stagedSewing.skippedCount}</span></div>
                   </div>
                 ) : (
-                  <span className="text-[11px] text-slate-400">Retaining previously uploaded data</span>
+                  <span className="text-[11px] text-slate-500">Retaining previously uploaded data</span>
                 )}
               </div>
 
               {/* Knitting Staged Info */}
-              <div className="bg-white p-4 rounded-2xl border border-slate-200">
-                <div className="flex items-center justify-between font-bold text-slate-900 mb-1">
+              <div className="bg-navy-900/80 p-4 rounded-2xl border border-navy-700/80">
+                <div className="flex items-center justify-between font-bold text-white mb-1">
                   <span>Knitting WIP</span>
-                  <span className="font-mono text-emerald-600">
+                  <span className="font-mono text-emerald-400">
                     {stagedKnitting ? `${stagedKnitting.rows.length} unique SO_LIs` : 'Unchanged'}
                   </span>
                 </div>
                 {stagedKnitting ? (
-                  <div className="text-[11px] text-slate-500 space-y-0.5">
-                    <div>File: <span className="font-semibold text-slate-700">{stagedKnitting.fileName}</span></div>
-                    <div>Aggregated from: <span className="font-mono text-slate-700">{stagedKnitting.rawCount} size rows</span></div>
+                  <div className="text-[11px] text-slate-400 space-y-0.5">
+                    <div>File: <span className="font-semibold text-slate-200">{stagedKnitting.fileName}</span></div>
+                    <div>Aggregated from: <span className="font-mono text-cyan-300">{stagedKnitting.rawCount} size rows</span></div>
                   </div>
                 ) : (
-                  <span className="text-[11px] text-slate-400">Retaining previously uploaded data</span>
+                  <span className="text-[11px] text-slate-500">Retaining previously uploaded data</span>
                 )}
               </div>
 
               {/* Trims Staged Info & Sheet Picker */}
-              <div className="bg-white p-4 rounded-2xl border border-slate-200">
-                <div className="flex items-center justify-between font-bold text-slate-900 mb-1">
+              <div className="bg-navy-900/80 p-4 rounded-2xl border border-navy-700/80">
+                <div className="flex items-center justify-between font-bold text-white mb-1">
                   <span>Trims Readiness</span>
-                  <span className="font-mono text-emerald-600">
+                  <span className="font-mono text-emerald-400">
                     {stagedTrims ? `${stagedTrims.rows.length} rows` : 'Unchanged'}
                   </span>
                 </div>
                 {stagedTrims ? (
-                  <div className="text-[11px] text-slate-500 space-y-1.5">
-                    <div>File: <span className="font-semibold text-slate-700">{stagedTrims.fileName}</span></div>
+                  <div className="text-[11px] text-slate-400 space-y-1.5">
+                    <div>File: <span className="font-semibold text-slate-200">{stagedTrims.fileName}</span></div>
                     <div>
-                      <label className="block text-[10px] font-bold uppercase text-slate-700 mt-1 mb-0.5">
+                      <label className="block text-[10px] font-bold uppercase text-slate-300 mt-1 mb-0.5">
                         Selected Snapshot Sheet:
                       </label>
                       <select
                         value={stagedTrims.sheetUsed}
                         onChange={(e) => handleTrimsSheetChange(e.target.value)}
-                        className="w-full px-2 py-1 rounded-lg border border-slate-300 bg-slate-50 text-slate-900 font-mono text-[11px] focus:ring-1 focus:ring-slate-900"
+                        className="w-full px-2 py-1 rounded-lg border border-navy-700 bg-navy-950 text-white font-mono text-[11px] focus:ring-1 focus:ring-cyan-500"
                       >
                         {stagedTrims.availableSheets.map((s) => (
                           <option key={s.sheetName} value={s.sheetName}>
@@ -588,7 +588,7 @@ export default function AdminUploadPage() {
                     </div>
                   </div>
                 ) : (
-                  <span className="text-[11px] text-slate-400">Retaining previously uploaded data</span>
+                  <span className="text-[11px] text-slate-500">Retaining previously uploaded data</span>
                 )}
               </div>
             </div>

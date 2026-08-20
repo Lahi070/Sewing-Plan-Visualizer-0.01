@@ -119,11 +119,13 @@ export function ReadinessTable({
       if (sortField === 'status') {
         comparison = statusPriority[a.overallStatus] - statusPriority[b.overallStatus];
       } else if (sortField === 'date') {
-        comparison = (a.plannedDate || '').localeCompare(b.plannedDate || '');
-      } else if (sortField === 'module') {
-        comparison = a.module.localeCompare(b.module, undefined, { numeric: true });
+        const dateA = a.plannedDate ? new Date(a.plannedDate).getTime() : 0;
+        const dateB = b.plannedDate ? new Date(b.plannedDate).getTime() : 0;
+        comparison = dateA - dateB;
       } else if (sortField === 'qty') {
         comparison = a.qtyNeeded - b.qtyNeeded;
+      } else if (sortField === 'module') {
+        comparison = a.module.localeCompare(b.module, undefined, { numeric: true });
       } else if (sortField === 'soli') {
         comparison = a.so_li.localeCompare(b.so_li);
       }
@@ -134,12 +136,12 @@ export function ReadinessTable({
     return list;
   }, [filteredItems, sortField, sortOrder]);
 
-  // Paginate
-  const totalPages = Math.ceil(sortedItems.length / pageSize) || 1;
-  const paginatedItems = sortedItems.slice(
-    (currentPage - 1) * pageSize,
-    currentPage * pageSize
-  );
+  // Pagination slice
+  const totalPages = Math.max(1, Math.ceil(sortedItems.length / pageSize));
+  const paginatedItems = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return sortedItems.slice(start, start + pageSize);
+  }, [sortedItems, currentPage, pageSize]);
 
   const toggleSort = (field: SortField) => {
     if (sortField === field) {
@@ -150,7 +152,7 @@ export function ReadinessTable({
     }
   };
 
-  // CSV Export
+  // Export to CSV helper
   const exportToCSV = () => {
     const headers = [
       'Module',
@@ -160,78 +162,78 @@ export function ReadinessTable({
       'Product Type',
       'CW',
       'Planned Date',
-      'Days Diff',
-      'Qty Needed',
-      'Knit SM WIP',
-      'Knit Ready',
+      'Days to Sew',
+      'Planned Qty',
+      'Knitting SM WIP',
+      'Knitting Ready',
       'Trims Status',
-      'Trims PSD',
       'Trims PED',
       'Trims Ready',
       'Overall Status',
-      'Reason',
+      'Status Reason',
     ];
 
-    const rows = sortedItems.map((i) => [
-      `"${i.module}"`,
-      `"${i.so_li}"`,
-      `"${i.customer}"`,
-      `"${i.style}"`,
-      `"${i.productType}"`,
-      `"${i.cw}"`,
-      `"${i.plannedDate}"`,
-      i.diffDays,
-      i.qtyNeeded,
-      i.knitSmWip,
-      i.knitReady ? 'YES' : 'NO',
-      `"${i.trimsStatus}"`,
-      `"${i.trimsPsd}"`,
-      `"${i.trimsPed}"`,
-      i.trimsReady ? 'YES' : 'NO',
-      `"${i.overallStatus}"`,
-      `"${i.statusReason.replace(/"/g, '""')}"`,
+    const rows = sortedItems.map((item) => [
+      item.module,
+      item.so_li,
+      item.customer,
+      item.style,
+      item.productType,
+      item.cw,
+      item.plannedDate || '',
+      item.diffDays,
+      item.qtyNeeded,
+      item.knitSmWip,
+      item.knitReady ? 'YES' : 'NO',
+      item.trimsStatus,
+      item.trimsPed || '',
+      item.trimsReady ? 'YES' : 'NO',
+      item.overallStatus,
+      `"${(item.statusReason || '').replace(/"/g, '""')}"`,
     ]);
 
-    const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
+    const csvContent =
+      'data:text/csv;charset=utf-8,' +
+      [headers.join(','), ...rows.map((e) => e.join(','))].join('\n');
+
+    const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
-    link.setAttribute('href', url);
-    link.setAttribute('download', `Sewing_Readiness_Report_${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `sewing_readiness_report_${new Date().toISOString().split('T')[0]}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
 
   return (
-    <div className="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden">
-      {/* Controls Header */}
-      <div className="p-4 sm:p-5 border-b border-slate-100 space-y-3">
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+    <div className="bg-gradient-to-br from-navy-850 to-navy-900 rounded-3xl border border-navy-700/80 shadow-xl shadow-navy-950/50 overflow-hidden backdrop-blur-md">
+      {/* Header Controls Bar */}
+      <div className="p-4 sm:p-5 border-b border-navy-700/70 bg-navy-900/60 space-y-4">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3.5">
           {/* Search Box */}
           <div className="relative flex-1 max-w-md">
-            <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+            <Search className="w-4 h-4 text-cyan-400/80 absolute left-3.5 top-1/2 -translate-y-1/2" />
             <input
               type="text"
+              placeholder="Search SO_LI, Style, Module, Customer..."
               value={searchTerm}
               onChange={(e) => {
                 setSearchTerm(e.target.value);
                 setCurrentPage(1);
               }}
-              placeholder="Search SO_LI, Module, Style, Customer..."
-              className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:bg-white transition-all"
+              className="w-full pl-10 pr-4 py-2.5 bg-navy-950/80 border border-navy-700/80 rounded-xl text-xs font-medium text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 transition-all"
             />
             {searchTerm && (
               <button
                 onClick={() => setSearchTerm('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-slate-600"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-white"
               >
-                Clear
+                ✕
               </button>
             )}
           </div>
 
-          {/* Right Action Tools */}
+          {/* Filters Row */}
           <div className="flex flex-wrap items-center gap-2 text-xs">
             {/* Status Filter */}
             <select
@@ -240,13 +242,13 @@ export function ReadinessTable({
                 onStatusFilterChange(e.target.value as any);
                 setCurrentPage(1);
               }}
-              className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-slate-900"
+              className="px-3 py-2 bg-navy-950/80 border border-navy-700/80 rounded-xl text-slate-200 font-medium focus:outline-none focus:ring-2 focus:ring-cyan-500"
             >
               <option value="ALL">All Statuses</option>
-              <option value="READY">Ready Only (✅)</option>
-              <option value="AT_RISK">At Risk Only (🟡)</option>
-              <option value="NOT_READY">Delayed / Not Ready (🔴)</option>
-              <option value="UPCOMING">Upcoming Only (⚪)</option>
+              <option value="READY">Ready (🟢)</option>
+              <option value="AT_RISK">At Risk (🟡)</option>
+              <option value="NOT_READY">Not Ready / Delayed (🔴)</option>
+              <option value="UPCOMING">Upcoming (🔵)</option>
               <option value="NO_DATA">Missing Data (⬜)</option>
             </select>
 
@@ -257,7 +259,7 @@ export function ReadinessTable({
                 setSelectedModule(e.target.value);
                 setCurrentPage(1);
               }}
-              className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-slate-900"
+              className="px-3 py-2 bg-navy-950/80 border border-navy-700/80 rounded-xl text-slate-200 font-medium focus:outline-none focus:ring-2 focus:ring-cyan-500"
             >
               <option value="ALL">All Modules ({availableModules.length})</option>
               {availableModules.map((m) => (
@@ -274,7 +276,7 @@ export function ReadinessTable({
                 setDateFilter(e.target.value as any);
                 setCurrentPage(1);
               }}
-              className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-slate-900"
+              className="px-3 py-2 bg-navy-950/80 border border-navy-700/80 rounded-xl text-slate-200 font-medium focus:outline-none focus:ring-2 focus:ring-cyan-500"
             >
               <option value="ALL">All Dates</option>
               <option value="3DAYS">Next 3 Days (Critical)</option>
@@ -285,88 +287,88 @@ export function ReadinessTable({
             {/* Export Button */}
             <button
               onClick={exportToCSV}
-              className="no-print inline-flex items-center space-x-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-semibold transition-colors"
+              className="no-print inline-flex items-center space-x-1.5 px-3.5 py-2 bg-navy-800 hover:bg-navy-700 text-slate-200 border border-navy-700/80 rounded-xl font-semibold transition-all hover:text-white"
             >
-              <Download className="w-3.5 h-3.5" />
+              <Download className="w-3.5 h-3.5 text-cyan-400" />
               <span>Export CSV</span>
             </button>
           </div>
         </div>
 
         {/* Filter Summary & Total Counter */}
-        <div className="flex items-center justify-between text-xs text-slate-500 pt-1">
+        <div className="flex items-center justify-between text-xs text-slate-400 pt-1">
           <div>
-            Showing <span className="font-bold text-slate-900 font-mono">{sortedItems.length}</span> matching lines
+            Showing <span className="font-bold text-white font-mono">{sortedItems.length}</span> matching lines
             {selectedStatusFilter !== 'ALL' && ` (Filtered: ${selectedStatusFilter})`}
             {selectedModule !== 'ALL' && ` (Module: ${selectedModule})`}
             {dateFilter !== 'ALL' && ` (${dateFilter})`}
           </div>
-          <div className="text-[11px]">
-            Sorted by <span className="font-semibold text-slate-700 uppercase">{sortField}</span> ({sortOrder})
+          <div className="text-[11px] text-slate-400">
+            Sorted by <span className="font-semibold text-cyan-300 uppercase">{sortField}</span> ({sortOrder})
           </div>
         </div>
       </div>
 
       {/* Main Table */}
       <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-slate-200 text-xs">
-          <thead className="bg-slate-50/80 font-bold text-slate-700 uppercase tracking-wider text-[11px]">
+        <table className="min-w-full divide-y divide-navy-700/60 text-xs">
+          <thead className="bg-navy-950/90 font-bold text-slate-300 uppercase tracking-wider text-[11px]">
             <tr>
               <th
                 onClick={() => toggleSort('module')}
-                className="py-3 px-4 text-left cursor-pointer hover:bg-slate-100 transition-colors"
+                className="py-3 px-4 text-left cursor-pointer hover:bg-navy-800/80 transition-colors"
               >
                 <div className="flex items-center space-x-1">
                   <span>Module</span>
-                  <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                  <ArrowUpDown className="w-3 h-3 text-cyan-400/80" />
                 </div>
               </th>
               <th
                 onClick={() => toggleSort('soli')}
-                className="py-3 px-4 text-left cursor-pointer hover:bg-slate-100 transition-colors"
+                className="py-3 px-4 text-left cursor-pointer hover:bg-navy-800/80 transition-colors"
               >
                 <div className="flex items-center space-x-1">
                   <span>SO_LI Key</span>
-                  <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                  <ArrowUpDown className="w-3 h-3 text-cyan-400/80" />
                 </div>
               </th>
               <th className="py-3 px-4 text-left">Customer / Style</th>
               <th
                 onClick={() => toggleSort('date')}
-                className="py-3 px-4 text-left cursor-pointer hover:bg-slate-100 transition-colors"
+                className="py-3 px-4 text-left cursor-pointer hover:bg-navy-800/80 transition-colors"
               >
                 <div className="flex items-center space-x-1">
                   <span>Planned Date</span>
-                  <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                  <ArrowUpDown className="w-3 h-3 text-cyan-400/80" />
                 </div>
               </th>
               <th
                 onClick={() => toggleSort('qty')}
-                className="py-3 px-4 text-right cursor-pointer hover:bg-slate-100 transition-colors"
+                className="py-3 px-4 text-right cursor-pointer hover:bg-navy-800/80 transition-colors"
               >
                 <div className="flex items-center justify-end space-x-1">
                   <span>Sew Qty</span>
-                  <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                  <ArrowUpDown className="w-3 h-3 text-cyan-400/80" />
                 </div>
               </th>
               <th className="py-3 px-4 text-center">Knitting WIP Status</th>
               <th className="py-3 px-4 text-center">Trims (RMW) Status</th>
               <th
                 onClick={() => toggleSort('status')}
-                className="py-3 px-4 text-center cursor-pointer hover:bg-slate-100 transition-colors"
+                className="py-3 px-4 text-center cursor-pointer hover:bg-navy-800/80 transition-colors"
               >
                 <div className="flex items-center justify-center space-x-1">
                   <span>Overall Status</span>
-                  <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                  <ArrowUpDown className="w-3 h-3 text-cyan-400/80" />
                 </div>
               </th>
               <th className="py-3 px-4 text-right no-print">Action</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100 bg-white">
+          <tbody className="divide-y divide-navy-700/50 bg-navy-900/40">
             {paginatedItems.length === 0 ? (
               <tr>
-                <td colSpan={9} className="py-12 text-center text-slate-400">
+                <td colSpan={9} className="py-12 text-center text-slate-500">
                   No matching sewing requirements found for the selected filters.
                 </td>
               </tr>
@@ -379,42 +381,42 @@ export function ReadinessTable({
                 return (
                   <tr
                     key={item.id}
-                    className="hover:bg-slate-50/90 transition-colors group"
+                    className="hover:bg-navy-800/60 transition-colors group"
                   >
                     {/* Module */}
-                    <td className="py-3.5 px-4 font-bold text-slate-900">
+                    <td className="py-3.5 px-4 font-bold text-white">
                       <button
                         onClick={() => onSelectModule(item.module)}
-                        className="inline-flex items-center space-x-1 font-mono font-bold text-slate-900 bg-slate-100 hover:bg-slate-200 px-2.5 py-1 rounded-lg transition-colors"
+                        className="inline-flex items-center space-x-1 font-mono font-bold text-cyan-300 bg-navy-950/80 hover:bg-navy-800 border border-navy-700/80 px-2.5 py-1 rounded-lg transition-colors"
                       >
                         <span>{item.module}</span>
                       </button>
                     </td>
 
                     {/* SO_LI Key */}
-                    <td className="py-3.5 px-4 font-mono font-bold text-slate-900 whitespace-nowrap">
+                    <td className="py-3.5 px-4 font-mono font-bold text-white whitespace-nowrap">
                       {item.so_li}
                     </td>
 
                     {/* Customer / Style */}
-                    <td className="py-3.5 px-4 text-slate-700">
-                      <div className="font-semibold text-slate-900 truncate max-w-[180px]">
+                    <td className="py-3.5 px-4 text-slate-300">
+                      <div className="font-semibold text-white truncate max-w-[180px]">
                         {item.style || item.productType || '-'}
                       </div>
-                      <div className="text-[11px] text-slate-500 truncate max-w-[180px]">
-                        {item.customer && <span className="font-medium text-slate-700">{item.customer} · </span>}
+                      <div className="text-[11px] text-slate-400 truncate max-w-[180px]">
+                        {item.customer && <span className="font-medium text-slate-300">{item.customer} · </span>}
                         {item.cw || item.productType || ''}
                       </div>
                     </td>
 
                     {/* Planned Date */}
                     <td className="py-3.5 px-4 whitespace-nowrap">
-                      <div className="font-medium text-slate-900">{formatDate(item.plannedDate)}</div>
+                      <div className="font-medium text-white">{formatDate(item.plannedDate)}</div>
                       <div className="text-[11px]">
                         {isOverdue ? (
-                          <span className="text-rose-600 font-bold">Today / Overdue</span>
+                          <span className="text-rose-400 font-bold">Today / Overdue</span>
                         ) : isUrgentWindow ? (
-                          <span className="text-amber-600 font-bold">in {item.diffDays} day{item.diffDays === 1 ? '' : 's'}</span>
+                          <span className="text-amber-400 font-bold">in {item.diffDays} day{item.diffDays === 1 ? '' : 's'}</span>
                         ) : (
                           <span className="text-slate-400">in {item.diffDays} days</span>
                         )}
@@ -422,7 +424,7 @@ export function ReadinessTable({
                     </td>
 
                     {/* Sew Qty */}
-                    <td className="py-3.5 px-4 text-right font-mono font-bold text-slate-900 whitespace-nowrap">
+                    <td className="py-3.5 px-4 text-right font-mono font-bold text-white whitespace-nowrap">
                       {formatNumber(item.qtyNeeded)} pcs
                     </td>
 
@@ -433,20 +435,20 @@ export function ReadinessTable({
                           <span
                             className={`inline-flex items-center space-x-1 px-2.5 py-1 rounded-lg text-xs font-mono font-bold border ${
                               item.knitReady
-                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                                : 'bg-rose-50 text-rose-700 border-rose-200'
+                                ? 'bg-emerald-950/80 text-emerald-300 border-emerald-500/40'
+                                : 'bg-rose-950/80 text-rose-300 border-rose-500/40'
                             }`}
                           >
                             <span>
                               {formatNumber(item.qtyNeeded)} / {formatNumber(item.knitSmWip)}
                             </span>
                           </span>
-                          <span className="block text-[10px] text-slate-500 mt-0.5">
+                          <span className="block text-[10px] text-slate-400 mt-0.5">
                             {item.knitReady ? 'Knit Ready' : 'Fabric Shortage'}
                           </span>
                         </div>
                       ) : (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-gray-100 text-gray-500">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-slate-900 text-slate-500 border border-slate-800">
                           Not in Knit WIP
                         </span>
                       )}
@@ -459,46 +461,50 @@ export function ReadinessTable({
                           <span
                             className={`inline-flex items-center space-x-1 px-2.5 py-1 rounded-lg text-xs font-bold border ${
                               item.trimsReady
-                                ? 'bg-sky-50 text-sky-700 border-sky-200'
-                                : 'bg-amber-50 text-amber-800 border-amber-200'
+                                ? 'bg-sky-950/80 text-sky-300 border-sky-500/40'
+                                : item.trimsStatus === 'OK' && item.trimsPedDelayed
+                                ? 'bg-amber-950/80 text-amber-300 border-amber-500/40'
+                                : 'bg-rose-950/80 text-rose-300 border-rose-500/40'
                             }`}
                           >
                             <span>{item.trimsStatus || 'NO'}</span>
-                            {item.trimsPedDelayed && (
-                              <span className="text-[10px] text-rose-600 font-bold ml-1">(PED Late)</span>
-                            )}
                           </span>
-                          {item.trimsPed && (
-                            <span className="block text-[10px] text-slate-500 mt-0.5">
-                              PED: {formatDate(item.trimsPed)}
-                            </span>
-                          )}
+                          <span className="block text-[10px] text-slate-400 mt-0.5">
+                            {item.trimsPed ? `PED: ${formatDate(item.trimsPed)}` : 'Trims Verified'}
+                          </span>
                         </div>
                       ) : (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-gray-100 text-gray-500">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-slate-900 text-slate-500 border border-slate-800">
                           No Trims Record
                         </span>
                       )}
                     </td>
 
-                    {/* Overall Status */}
+                    {/* Overall Status Badge */}
                     <td className="py-3.5 px-4 text-center whitespace-nowrap">
                       <span
-                        className={`inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-bold border shadow-2xs ${statusCfg.badgeClass}`}
+                        className={`inline-flex items-center space-x-1 px-3 py-1 rounded-full text-xs font-bold border shadow-xs ${statusCfg.badgeClass}`}
                       >
-                        <span className={`w-1.5 h-1.5 rounded-full ${statusCfg.pillClass}`} />
                         <span>{statusCfg.label}</span>
                       </span>
+                      {item.statusReason && (
+                        <div
+                          title={item.statusReason}
+                          className="text-[10px] text-slate-400 truncate max-w-[150px] mx-auto mt-0.5"
+                        >
+                          {item.statusReason}
+                        </div>
+                      )}
                     </td>
 
-                    {/* Drill-down action */}
-                    <td className="py-3.5 px-4 text-right no-print">
+                    {/* Action */}
+                    <td className="py-3.5 px-4 text-right whitespace-nowrap no-print">
                       <button
                         onClick={() => onSelectModule(item.module)}
-                        className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-600 hover:text-slate-900 transition-colors"
-                        title={`View Module ${item.module} Details`}
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-navy-800 transition-colors"
+                        title="View module summary & pie charts"
                       >
-                        <ExternalLink className="w-3.5 h-3.5" />
+                        <ExternalLink className="w-4 h-4" />
                       </button>
                     </td>
                   </tr>
@@ -510,25 +516,45 @@ export function ReadinessTable({
       </div>
 
       {/* Pagination Footer */}
-      <div className="p-4 border-t border-slate-100 flex items-center justify-between bg-slate-50/50 text-xs text-slate-600">
+      <div className="p-4 border-t border-navy-700/60 bg-navy-950/80 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-400">
         <div>
-          Showing page <span className="font-bold text-slate-900">{currentPage}</span> of{' '}
-          <span className="font-bold text-slate-900">{totalPages}</span>
+          Showing page <span className="font-bold text-white font-mono">{currentPage}</span> of{' '}
+          <span className="font-bold text-white font-mono">{totalPages}</span> ({sortedItems.length} total rows)
         </div>
-        <div className="flex items-center space-x-2">
+
+        <div className="flex items-center space-x-1.5">
+          <button
+            onClick={() => setCurrentPage(1)}
+            disabled={currentPage === 1}
+            className="px-2.5 py-1.5 rounded-lg border border-navy-700/80 bg-navy-900 text-slate-300 hover:bg-navy-800 disabled:opacity-40 disabled:cursor-not-allowed font-medium transition-colors"
+          >
+            First
+          </button>
           <button
             onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
             disabled={currentPage === 1}
-            className="p-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            className="p-1.5 rounded-lg border border-navy-700/80 bg-navy-900 text-slate-300 hover:bg-navy-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
             <ChevronLeft className="w-4 h-4" />
           </button>
+
+          <span className="px-3 py-1 font-mono font-bold text-cyan-300">
+            {currentPage} / {totalPages}
+          </span>
+
           <button
             onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
             disabled={currentPage === totalPages}
-            className="p-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            className="p-1.5 rounded-lg border border-navy-700/80 bg-navy-900 text-slate-300 hover:bg-navy-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
             <ChevronRight className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => setCurrentPage(totalPages)}
+            disabled={currentPage === totalPages}
+            className="px-2.5 py-1.5 rounded-lg border border-navy-700/80 bg-navy-900 text-slate-300 hover:bg-navy-800 disabled:opacity-40 disabled:cursor-not-allowed font-medium transition-colors"
+          >
+            Last
           </button>
         </div>
       </div>

@@ -76,24 +76,24 @@ export function FileUploadZone({
   };
 
   return (
-    <div className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 shadow-xs flex flex-col justify-between">
+    <div className="bg-gradient-to-br from-navy-850 to-navy-900 rounded-3xl border border-navy-700/80 p-5 sm:p-6 shadow-xl shadow-navy-950/40 flex flex-col justify-between backdrop-blur-md">
       <div>
         {/* Step Badge & Header */}
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center space-x-2.5">
-            <span className="w-7 h-7 rounded-xl bg-slate-900 text-white text-xs font-extrabold flex items-center justify-center shadow-xs">
+            <span className="w-7 h-7 rounded-xl bg-gradient-to-br from-blue-600 to-navy-800 border border-blue-400/30 text-white text-xs font-extrabold flex items-center justify-center shadow-md">
               {stepNumber}
             </span>
-            <h3 className="text-base font-bold text-slate-900">{title}</h3>
+            <h3 className="text-base font-bold text-white">{title}</h3>
           </div>
           {lastUploadedAt && (
-            <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded text-[11px] font-medium bg-slate-100 text-slate-600">
+            <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-950/80 text-emerald-300 border border-emerald-500/30">
               <span>Active</span>
             </span>
           )}
         </div>
 
-        <p className="text-xs text-slate-500 mb-4">{subtitle}</p>
+        <p className="text-xs text-slate-400 mb-4">{subtitle}</p>
 
         {/* Dropzone Box */}
         <div
@@ -103,10 +103,10 @@ export function FileUploadZone({
           onClick={() => fileInputRef.current?.click()}
           className={`border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer transition-all duration-200 ${
             isDragOver
-              ? 'border-emerald-500 bg-emerald-50/50 scale-[1.01]'
+              ? 'border-cyan-400 bg-cyan-950/40 scale-[1.01] shadow-cyan-glow'
               : selectedFileName
-              ? 'border-emerald-300 bg-emerald-50/20'
-              : 'border-slate-200 hover:border-slate-400 bg-slate-50/60 hover:bg-slate-50'
+              ? 'border-emerald-500/50 bg-emerald-950/20'
+              : 'border-navy-700/80 hover:border-cyan-500/60 bg-navy-950/60 hover:bg-navy-900/80'
           }`}
         >
           <input
@@ -123,14 +123,14 @@ export function FileUploadZone({
 
           <div className="flex flex-col items-center justify-center space-y-2">
             <div
-              className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+              className={`w-11 h-11 rounded-xl flex items-center justify-center ${
                 selectedFileName
-                  ? 'bg-emerald-100 text-emerald-700'
-                  : 'bg-slate-100 text-slate-500'
+                  ? 'bg-emerald-950 text-emerald-400 border border-emerald-500/40'
+                  : 'bg-navy-800 text-cyan-400 border border-navy-700'
               }`}
             >
               {isLoading ? (
-                <RefreshCw className="w-5 h-5 animate-spin text-emerald-600" />
+                <RefreshCw className="w-5 h-5 animate-spin text-cyan-400" />
               ) : selectedFileName ? (
                 <CheckCircle2 className="w-5 h-5" />
               ) : (
@@ -139,10 +139,10 @@ export function FileUploadZone({
             </div>
 
             <div>
-              <p className="text-xs font-bold text-slate-800">
+              <p className="text-xs font-bold text-slate-200">
                 {selectedFileName ? selectedFileName : 'Drag & drop Excel file here'}
               </p>
-              <p className="text-[11px] text-slate-400 mt-0.5">
+              <p className="text-[11px] text-slate-500 mt-0.5">
                 or click to browse (.xlsx, .xls)
               </p>
             </div>
@@ -150,8 +150,8 @@ export function FileUploadZone({
         </div>
 
         {errorMsg && (
-          <div className="mt-3 flex items-start space-x-2 text-xs text-rose-600 bg-rose-50 p-2.5 rounded-xl border border-rose-200">
-            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+          <div className="mt-3 flex items-start space-x-2 text-xs text-rose-300 bg-rose-950/80 p-2.5 rounded-xl border border-rose-500/40">
+            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-400" />
             <span>{errorMsg}</span>
           </div>
         )}
@@ -159,23 +159,23 @@ export function FileUploadZone({
 
       {/* Metadata Info Footer */}
       {(lastFileName || lastUploadedAt || lastSheetUsed) && (
-        <div className="mt-4 pt-3 border-t border-slate-100 text-[11px] text-slate-500 space-y-0.5">
+        <div className="mt-4 pt-3 border-t border-navy-700/60 text-[11px] text-slate-400 space-y-0.5">
           {lastFileName && (
             <div className="flex justify-between">
               <span>Current file:</span>
-              <span className="font-semibold text-slate-700 truncate max-w-[170px]">{lastFileName}</span>
+              <span className="font-semibold text-slate-200 truncate max-w-[170px]">{lastFileName}</span>
             </div>
           )}
           {lastSheetUsed && (
             <div className="flex justify-between">
               <span>Sheet parsed:</span>
-              <span className="font-mono font-medium text-slate-700">{lastSheetUsed}</span>
+              <span className="font-mono font-medium text-cyan-300">{lastSheetUsed}</span>
             </div>
           )}
           {lastUploadedAt && (
             <div className="flex justify-between">
               <span>Last uploaded:</span>
-              <span className="font-medium text-slate-600">
+              <span className="font-medium text-slate-400">
                 {new Date(lastUploadedAt).toLocaleDateString()} {new Date(lastUploadedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
               </span>
             </div>

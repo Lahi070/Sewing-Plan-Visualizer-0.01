@@ -33,9 +33,9 @@ export function getStatusConfig(status: ReadinessStatus) {
     case "READY":
       return {
         label: "Ready",
-        badgeClass: "bg-emerald-50 text-emerald-700 border-emerald-200 ring-emerald-600/20",
+        badgeClass: "bg-emerald-950/80 text-emerald-300 border-emerald-500/40 shadow-emerald-glow",
         pillClass: "bg-emerald-500",
-        textClass: "text-emerald-700",
+        textClass: "text-emerald-400",
         borderClass: "border-emerald-500",
         iconName: "CheckCircle2",
         hexColor: "#10b981",
@@ -44,9 +44,9 @@ export function getStatusConfig(status: ReadinessStatus) {
     case "AT_RISK":
       return {
         label: "At Risk",
-        badgeClass: "bg-amber-50 text-amber-800 border-amber-300 ring-amber-600/20 animate-pulse",
+        badgeClass: "bg-amber-950/80 text-amber-300 border-amber-500/40 shadow-amber-glow animate-pulse",
         pillClass: "bg-amber-500",
-        textClass: "text-amber-700",
+        textClass: "text-amber-400",
         borderClass: "border-amber-500",
         iconName: "AlertTriangle",
         hexColor: "#f59e0b",
@@ -55,32 +55,32 @@ export function getStatusConfig(status: ReadinessStatus) {
     case "NOT_READY":
       return {
         label: "Not Ready / Delayed",
-        badgeClass: "bg-rose-50 text-rose-800 border-rose-300 ring-rose-600/20",
+        badgeClass: "bg-rose-950/80 text-rose-300 border-rose-500/40 shadow-rose-glow",
         pillClass: "bg-rose-500",
-        textClass: "text-rose-700",
+        textClass: "text-rose-400",
         borderClass: "border-rose-500",
         iconName: "XCircle",
-        hexColor: "#ef4444",
+        hexColor: "#f43f5e",
         description: "Prerequisites missing and planned sewing date is today or in the past.",
       };
     case "UPCOMING":
       return {
         label: "Upcoming",
-        badgeClass: "bg-slate-100 text-slate-700 border-slate-200 ring-slate-600/10",
-        pillClass: "bg-slate-400",
-        textClass: "text-slate-600",
-        borderClass: "border-slate-400",
+        badgeClass: "bg-sky-950/80 text-sky-300 border-sky-500/40 shadow-cyan-glow",
+        pillClass: "bg-sky-400",
+        textClass: "text-sky-400",
+        borderClass: "border-sky-500",
         iconName: "Clock",
-        hexColor: "#64748b",
+        hexColor: "#38bdf8",
         description: "Not ready yet, but planned sewing date is more than 3 days away.",
       };
     case "NO_DATA":
       return {
         label: "No Data",
-        badgeClass: "bg-gray-100 text-gray-600 border-gray-300 ring-gray-600/10",
-        pillClass: "bg-gray-400",
-        textClass: "text-gray-500",
-        borderClass: "border-gray-400",
+        badgeClass: "bg-slate-900/90 text-slate-400 border-slate-700/60 shadow-navy-glow",
+        pillClass: "bg-slate-500",
+        textClass: "text-slate-400",
+        borderClass: "border-slate-600",
         iconName: "HelpCircle",
         hexColor: "#94a3b8",
         description: "SO_LI not found in Knitting and/or Trims readiness datasets.",
