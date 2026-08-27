@@ -261,6 +261,107 @@ export function parseKnittingWipWorkbook(workbook: XLSX.WorkBook): {
 }
 
 /**
+ * Helper to parse "Trim readiness status" Module-Date Matrix Sheet
+ */
+export function parseTrimReadinessMatrixSheet(worksheet: XLSX.WorkSheet, currentYear: number = new Date().getFullYear()): TrimsPlanRow[] {
+  const rawTable: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
+  const rows: TrimsPlanRow[] = [];
+  
+  let headerRowIdx = -1;
+  let moduleColIdx = 0;
+
+  for (let i = 0; i < Math.min(10, rawTable.length); i++) {
+    const row = rawTable[i];
+    if (Array.isArray(row)) {
+      for (let j = 0; j < row.length; j++) {
+        const val = String(row[j] || '').trim().toLowerCase();
+        if (val.includes('module') || val === 'line' || val === 'module no') {
+          headerRowIdx = i;
+          moduleColIdx = j;
+          break;
+        }
+      }
+      if (headerRowIdx >= 0) break;
+    }
+  }
+
+  if (headerRowIdx < 0) return [];
+
+  const headerRow = rawTable[headerRowIdx];
+  const dateCols: { colIdx: number; dateStr: string }[] = [];
+
+  for (let j = moduleColIdx + 1; j < headerRow.length; j++) {
+    const rawHeader = String(headerRow[j] || '').trim();
+    if (!rawHeader || rawHeader.toLowerCase().includes('remark') || rawHeader.toLowerCase().includes('comment')) continue;
+
+    const dStr = parseExcelDate(rawHeader);
+    if (dStr) {
+      dateCols.push({ colIdx: j, dateStr: dStr });
+    } else {
+      const match = rawHeader.match(/^([0-9]{1,2})[-/\s]([a-zA-Z]{3})/i);
+      if (match) {
+        const day = parseInt(match[1], 10);
+        const monthNames = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+        const mIdx = monthNames.indexOf(match[2].toLowerCase());
+        if (mIdx >= 0) {
+          const d = new Date(currentYear, mIdx, day);
+          dateCols.push({ colIdx: j, dateStr: d.toISOString().split('T')[0] });
+        }
+      }
+    }
+  }
+
+  for (let i = headerRowIdx + 1; i < rawTable.length; i++) {
+    const row = rawTable[i];
+    if (!row || row.length === 0) continue;
+
+    const rawMod = String(row[moduleColIdx] || '').trim().toUpperCase();
+    if (!rawMod || rawMod.toLowerCase().includes('total')) continue;
+
+    let moduleNo = rawMod;
+    if (!moduleNo.startsWith('M') && /^\d+$/.test(moduleNo)) {
+      moduleNo = `M${moduleNo.padStart(2, '0')}`;
+    }
+
+    let hasAnyReady = false;
+    for (const dc of dateCols) {
+      const cellVal = row[dc.colIdx];
+      const cellStr = String(cellVal || '').trim();
+      const cellNum = Number(cellVal);
+
+      if ((!isNaN(cellNum) && cellNum > 0) || cellStr.toLowerCase() === 'plan' || cellStr.toLowerCase() === 'ok' || cellStr.toLowerCase() === 'green') {
+        hasAnyReady = true;
+        rows.push({
+          soli: `MODULE_${moduleNo}_${dc.dateStr}`,
+          module: moduleNo,
+          customer: '',
+          product: '',
+          cw: '',
+          status: 'GREEN',
+          psd: dc.dateStr,
+          ped: dc.dateStr,
+          sheetName: 'Trim readiness status',
+        });
+      }
+    }
+
+    if (hasAnyReady || moduleNo) {
+      rows.push({
+        soli: `MODULE_READY_${moduleNo}`,
+        module: moduleNo,
+        customer: '',
+        product: '',
+        cw: '',
+        status: 'GREEN',
+        sheetName: 'Trim readiness status',
+      });
+    }
+  }
+
+  return rows;
+}
+
+/**
  * Helper to discover and score dated sheets in Trims workbook
  */
 export function discoverTrimsDatedSheets(workbook: XLSX.WorkBook): {
@@ -331,8 +432,7 @@ export function discoverTrimsDatedSheets(workbook: XLSX.WorkBook): {
 
 /**
  * 3. Parse Trims Readiness file
- * Rule: Reads Trims allocation status (GREEN/OK vs RED/NO).
- * Scans primary sheet and merges all plan summary sheets so no module is missed.
+ * Multi-layer parser: Scans "Trim readiness status" matrix sheet AND item detail sheets.
  */
 export function parseTrimsReadinessWorkbook(
   workbook: XLSX.WorkBook,
@@ -351,7 +451,24 @@ export function parseTrimsReadinessWorkbook(
   const seenSoli = new Set<string>();
   let totalRawCount = 0;
 
-  // Determine sheets to scan (primary target sheet first, then all remaining plan sheets)
+  // 1. First, check if there is a "Trim readiness status" matrix sheet
+  for (const s of workbook.SheetNames) {
+    const lower = s.toLowerCase();
+    if (lower.includes('readiness status') || lower.includes('trim readiness') || lower === 'status') {
+      const matrixSheet = workbook.Sheets[s];
+      if (matrixSheet) {
+        const matrixRows = parseTrimReadinessMatrixSheet(matrixSheet);
+        for (const mr of matrixRows) {
+          if (!seenSoli.has(mr.soli)) {
+            seenSoli.add(mr.soli);
+            rows.push(mr);
+          }
+        }
+      }
+    }
+  }
+
+  // 2. Scan all item detail sheets (e.g. Plan summery, MRP,VAS, Dec, Nike lbl, Plan summary ...)
   const sheetsToScan = [targetSheet];
   for (const s of workbook.SheetNames) {
     if (!sheetsToScan.includes(s) && !s.toLowerCase().includes('pivot')) {

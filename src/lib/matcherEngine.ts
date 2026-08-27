@@ -147,8 +147,18 @@ export function evaluateReadiness(
 
   for (const sew of safeSewing) {
     const normKey = normalizeSoLi(sew.so_li);
-    const knit = knitMap.get(normKey) || knitMap.get(sew.so_li?.trim());
-    const trims = trimsMap.get(normKey) || trimsMap.get(sew.so_li?.trim());
+    let knit = knitMap.get(normKey) || knitMap.get(sew.so_li?.trim());
+    let trims = trimsMap.get(normKey) || trimsMap.get(sew.so_li?.trim());
+
+    // Fallback 1: Date-specific module readiness from "Trim readiness status" matrix
+    if (!trims && sew.module && sew.plannedDate) {
+      trims = trimsMap.get(`MODULE_${sew.module}_${sew.plannedDate}`);
+    }
+
+    // Fallback 2: Overall module readiness from "Trim readiness status" matrix
+    if (!trims && sew.module) {
+      trims = trimsMap.get(`MODULE_READY_${sew.module}`);
+    }
 
     const diffDays = calculateDaysRemaining(sew.plannedDate, anchorDate);
     totalQtyNeeded += Number(sew.qty) || 0;
