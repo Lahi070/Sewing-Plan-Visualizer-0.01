@@ -2,8 +2,8 @@ import {
   SewingPlanRow,
   KnittingPlanRow,
   TrimsPlanRow,
-  ReadinessItem,
-  ReadinessMetrics,
+  MatchedReadinessItem,
+  OverallMetrics,
   ModuleSummary,
   ReadinessStatus,
 } from './types';
@@ -67,23 +67,26 @@ function buildIssueReason(
  * Core Cross-Referencing Matching Engine
  */
 export function evaluateReadiness(
-  sewingPlan: SewingPlanRow[],
-  knittingPlan: KnittingPlanRow[],
-  trimsPlan: TrimsPlanRow[],
+  sewingPlan: SewingPlanRow[] = [],
+  knittingPlan: KnittingPlanRow[] = [],
+  trimsPlan: TrimsPlanRow[] = [],
   anchorDate: Date = new Date()
 ): {
-  items: ReadinessItem[];
-  metrics: ReadinessMetrics;
+  items: MatchedReadinessItem[];
+  metrics: OverallMetrics;
   moduleSummaries: ModuleSummary[];
 } {
+  const safeSewing = Array.isArray(sewingPlan) ? sewingPlan : [];
+  const safeKnitting = Array.isArray(knittingPlan) ? knittingPlan : [];
+  const safeTrims = Array.isArray(trimsPlan) ? trimsPlan : [];
+
   // 1. Build fast Lookup Map for Knitting WIP with Normalized Keys
   const knitMap = new Map<string, KnittingPlanRow>();
-  for (const k of knittingPlan) {
+  for (const k of safeKnitting) {
     const norm = normalizeSoLi(k.so_li, k.salesOrder, k.lineItem);
     if (norm) {
       knitMap.set(norm, k);
     }
-    // Also store raw so_li as fallback
     if (k.so_li) {
       knitMap.set(k.so_li.trim(), k);
     }
@@ -91,7 +94,7 @@ export function evaluateReadiness(
 
   // 2. Build fast Lookup Map for Trims Readiness with Normalized Keys
   const trimsMap = new Map<string, TrimsPlanRow>();
-  for (const t of trimsPlan) {
+  for (const t of safeTrims) {
     const norm = normalizeSoLi(t.soli);
     if (norm) {
       trimsMap.set(norm, t);
@@ -101,12 +104,13 @@ export function evaluateReadiness(
     }
   }
 
-  const items: ReadinessItem[] = [];
+  const items: MatchedReadinessItem[] = [];
   let readyCount = 0;
   let atRiskCount = 0;
   let notReadyCount = 0;
   let upcomingCount = 0;
   let noDataCount = 0;
+  let totalQtyNeeded = 0;
 
   // Module summaries aggregator
   const moduleAgg: Record<
@@ -124,20 +128,21 @@ export function evaluateReadiness(
       knitTotalNeededQty: number;
       trimsOkCount: number;
       trimsTotalCount: number;
-      items: ReadinessItem[];
+      items: MatchedReadinessItem[];
     }
   > = {};
 
-  for (const sew of sewingPlan) {
+  for (const sew of safeSewing) {
     const normKey = normalizeSoLi(sew.so_li);
-    const knit = knitMap.get(normKey) || knitMap.get(sew.so_li.trim());
-    const trims = trimsMap.get(normKey) || trimsMap.get(sew.so_li.trim());
+    const knit = knitMap.get(normKey) || knitMap.get(sew.so_li?.trim());
+    const trims = trimsMap.get(normKey) || trimsMap.get(sew.so_li?.trim());
 
     const diffDays = calculateDaysRemaining(sew.plannedDate, anchorDate);
+    totalQtyNeeded += Number(sew.qty) || 0;
 
     // 1. Evaluate Knitting Side
     const knitFound = Boolean(knit);
-    const knitSmWip = knit ? knit.smWipTotal : 0;
+    const knitSmWip = knit ? (Number(knit.smWipTotal) || 0) : 0;
     const knitReady = knitFound && knitSmWip >= sew.qty;
 
     // 2. Evaluate Trims Side
@@ -158,12 +163,10 @@ export function evaluateReadiness(
     let statusReason = '';
 
     if (knitReady && trimsReady) {
-      // Both completely ready!
       overallStatus = 'READY';
       statusReason = `Ready: Knit (${sew.qty}/${knitSmWip} pcs) & Trims OK`;
       readyCount++;
     } else if (knitFound || trimsFound) {
-      // At least one prerequisite file verified
       if (diffDays <= 0) {
         overallStatus = 'NOT_READY';
         statusReason = buildIssueReason(knitFound, knitReady, knitSmWip, sew.qty, trimsFound, trimsReady, trimsStatus, trimsPedDelayed);
@@ -178,7 +181,6 @@ export function evaluateReadiness(
         upcomingCount++;
       }
     } else {
-      // Order not found in either WIP sheet
       if (diffDays <= 0) {
         overallStatus = 'NOT_READY';
         statusReason = 'Sewing date passed/today • No Knitting/Trims WIP confirmed';
@@ -198,9 +200,9 @@ export function evaluateReadiness(
       }
     }
 
-    const itemObj: ReadinessItem = {
+    const itemObj: MatchedReadinessItem = {
       id: `${sew.module}_${sew.so_li}_${sew.plannedDate}_${Math.random().toString(36).substr(2, 4)}`,
-      module: sew.module,
+      module: sew.module || 'M01',
       customer: sew.customer || trims?.customer || '',
       style: sew.style || trims?.product || '',
       productType: sew.productType || '',
@@ -208,7 +210,7 @@ export function evaluateReadiness(
       so_li: sew.so_li,
       plannedDate: sew.plannedDate,
       diffDays,
-      qtyNeeded: sew.qty,
+      qtyNeeded: Number(sew.qty) || 0,
       knitFound,
       knitSmWip,
       knitReady,
@@ -216,19 +218,19 @@ export function evaluateReadiness(
         ? {
             orderQty: knit.orderQtyTotal,
             knitQty: knit.knitQtyTotal,
-            pkinQty: knit.pkinQtyTotal,
-            qcQty: knit.qcQtyTotal,
-            shippedQty: knit.shippedQtyTotal,
             sizeCount: knit.sizeCount,
           }
         : undefined,
       trimsFound,
       trimsStatus: trimsStatus || (trimsFound ? 'OK' : 'PENDING'),
+      trimsPsd: trims?.psd || '',
+      trimsPed: trims?.ped || '',
       trimsReady,
-      trimsPed: trims?.ped,
-      trimsPsd: trims?.psd,
-      trimsDaysLate: trims?.daysLate || 0,
-      trimsComments: [trims?.rmComments, trims?.merchComments].filter(Boolean).join(' | '),
+      trimsPedDelayed,
+      trimsComments: {
+        rm: trims?.rmComments || '',
+        merch: trims?.merchComments || '',
+      },
       overallStatus,
       statusReason,
     };
@@ -257,9 +259,9 @@ export function evaluateReadiness(
 
     const mod = moduleAgg[m];
     mod.totalItems += 1;
-    mod.totalQty += sew.qty;
-    mod.knitTotalNeededQty += sew.qty;
-    mod.knitCompletedQty += Math.min(sew.qty, knitSmWip);
+    mod.totalQty += Number(sew.qty) || 0;
+    mod.knitTotalNeededQty += Number(sew.qty) || 0;
+    mod.knitCompletedQty += Math.min(Number(sew.qty) || 0, knitSmWip);
     if (trimsReady) mod.trimsOkCount += 1;
     mod.trimsTotalCount += 1;
 
@@ -278,22 +280,22 @@ export function evaluateReadiness(
       const cmp = a.plannedDate.localeCompare(b.plannedDate);
       if (cmp !== 0) return cmp;
     }
-    return a.module.localeCompare(b.module);
+    return (a.module || '').localeCompare(b.module || '');
   });
 
   const total = items.length || 1;
-  const metrics: ReadinessMetrics = {
-    totalRequirements: items.length,
-    ready: readyCount,
-    readyPct: Math.round((readyCount / total) * 100),
-    atRisk: atRiskCount,
-    atRiskPct: Math.round((atRiskCount / total) * 100),
-    notReady: notReadyCount,
-    notReadyPct: Math.round((notReadyCount / total) * 100),
-    upcoming: upcomingCount,
-    upcomingPct: Math.round((upcomingCount / total) * 100),
-    noData: noDataCount,
-    noDataPct: Math.round((noDataCount / total) * 100),
+  const metrics: OverallMetrics = {
+    totalItems: items.length,
+    totalQtyNeeded,
+    readyCount,
+    readyPercentage: Math.round((readyCount / total) * 100),
+    atRiskCount,
+    atRiskPercentage: Math.round((atRiskCount / total) * 100),
+    notReadyCount,
+    notReadyPercentage: Math.round((notReadyCount / total) * 100),
+    upcomingCount,
+    noDataCount,
+    urgentCount: atRiskCount + notReadyCount,
   };
 
   // Sort modules naturally: M01, M02, ... M26
