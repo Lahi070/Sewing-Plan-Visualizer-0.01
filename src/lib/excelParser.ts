@@ -164,6 +164,14 @@ export function parseSewingPlanWorkbook(workbook: XLSX.WorkBook): {
   let lastModuleName = 'M01';
 
   for (const r of rawRows) {
+    // 1. Always update lastModuleName first in case this is a grouping header row without qty
+    const moduleRaw = r['Module'] ?? r['Module#'] ?? r['module'] ?? r['Line'] ?? r['Line#'] ?? r['Module No'];
+    if (moduleRaw !== undefined && moduleRaw !== null && String(moduleRaw).trim() !== '') {
+      lastModuleName = normalizeModuleName(String(moduleRaw)) || 'M01';
+    }
+    const moduleNo = lastModuleName;
+
+    // 2. Then check if row has actual data
     const rawQty = r['Qty'] ?? r['qty'] ?? r['QTY'] ?? r['Planned Qty'] ?? r['Sew Qty'] ?? r['Quantity'];
     if (rawQty === '-' || rawQty === '' || rawQty === undefined || rawQty === null) {
       totalSkipped++;
@@ -175,12 +183,6 @@ export function parseSewingPlanWorkbook(workbook: XLSX.WorkBook): {
       totalSkipped++;
       continue;
     }
-
-    const moduleRaw = r['Module'] ?? r['Module#'] ?? r['module'] ?? r['Line'] ?? r['Line#'] ?? r['Module No'];
-    if (moduleRaw !== undefined && moduleRaw !== null && String(moduleRaw).trim() !== '') {
-      lastModuleName = normalizeModuleName(String(moduleRaw)) || 'M01';
-    }
-    const moduleNo = lastModuleName;
 
     const so_li = extractRowSoLi(r);
     const plannedDate = parseExcelDate(r['Date'] ?? r['date'] ?? r['Planned Date'] ?? r['Sewing Date'] ?? r['PSD']);
