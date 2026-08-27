@@ -105,8 +105,11 @@ export function evaluateReadiness(
     }
   }
 
-  // 2. Build fast Lookup Map for Trims Readiness with Normalized Keys
+  // 2. Build fast Lookup Map for Trims Readiness with Normalized Keys & Module Hierarchies
   const trimsMap = new Map<string, TrimsPlanRow>();
+  const moduleTrimsStatusMap = new Map<string, string>(); // module -> 'OK' | 'NO'
+  const moduleDateTrimsMap = new Map<string, string>(); // module_date -> 'OK' | 'NO'
+
   for (const t of safeTrims) {
     const norm = normalizeSoLi(t.soli);
     if (norm) {
@@ -114,6 +117,23 @@ export function evaluateReadiness(
     }
     if (t.soli) {
       trimsMap.set(t.soli.trim(), t);
+    }
+
+    const tStatus = isTrimsReady(t.status) ? 'OK' : 'NO';
+    const mod = String(t.module || '').trim().toUpperCase();
+
+    if (mod) {
+      // If any record for this module is Green/OK, the module trims status is OK
+      if (tStatus === 'OK' || !moduleTrimsStatusMap.has(mod)) {
+        moduleTrimsStatusMap.set(mod, tStatus);
+      }
+
+      if (t.psd) {
+        moduleDateTrimsMap.set(`${mod}_${t.psd}`, tStatus);
+      }
+      if (t.ped) {
+        moduleDateTrimsMap.set(`${mod}_${t.ped}`, tStatus);
+      }
     }
   }
 
@@ -150,28 +170,31 @@ export function evaluateReadiness(
     let knit = knitMap.get(normKey) || knitMap.get(sew.so_li?.trim());
     let trims = trimsMap.get(normKey) || trimsMap.get(sew.so_li?.trim());
 
-    // Fallback 1: Date-specific module readiness from "Trim readiness status" matrix
-    if (!trims && sew.module && sew.plannedDate) {
-      trims = trimsMap.get(`MODULE_${sew.module}_${sew.plannedDate}`);
-    }
-
-    // Fallback 2: Overall module readiness from "Trim readiness status" matrix
-    if (!trims && sew.module) {
-      trims = trimsMap.get(`MODULE_READY_${sew.module}`);
-    }
-
-    const diffDays = calculateDaysRemaining(sew.plannedDate, anchorDate);
-    totalQtyNeeded += Number(sew.qty) || 0;
-
     // 1. Evaluate Knitting Side
     const knitFound = Boolean(knit);
     const knitSmWip = knit ? (Number(knit.smWipTotal) || 0) : 0;
     const knitReady = knitFound && knitSmWip >= sew.qty;
 
-    // 2. Evaluate Trims Side (Only check Status: Green/OK vs Red/NO, no quantity logic)
-    const trimsFound = Boolean(trims);
-    const trimsStatus = trims ? String(trims.status || 'NO').toUpperCase() : '';
+    // 2. Evaluate Trims Side
+    let trimsFound = Boolean(trims);
+    let trimsStatus = trims ? String(trims.status || 'NO').toUpperCase() : '';
+
+    // Multi-level fallback: Match by Module & Date or Module overall status
+    if (!trimsFound && sew.module) {
+      const mod = sew.module.toUpperCase();
+      if (sew.plannedDate && moduleDateTrimsMap.has(`${mod}_${sew.plannedDate}`)) {
+        trimsFound = true;
+        trimsStatus = moduleDateTrimsMap.get(`${mod}_${sew.plannedDate}`) || 'OK';
+      } else if (moduleTrimsStatusMap.has(mod)) {
+        trimsFound = true;
+        trimsStatus = moduleTrimsStatusMap.get(mod) || 'OK';
+      }
+    }
+
     const trimsReady = trimsFound && isTrimsReady(trimsStatus);
+
+    const diffDays = calculateDaysRemaining(sew.plannedDate, anchorDate);
+    totalQtyNeeded += Number(sew.qty) || 0;
 
     // 3. Determine Overall Status
     let overallStatus: ReadinessStatus = 'UPCOMING';
