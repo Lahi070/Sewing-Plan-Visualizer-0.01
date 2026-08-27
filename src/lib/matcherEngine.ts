@@ -199,21 +199,26 @@ export function evaluateReadiness(
     const cleanMod = normalizeModuleName(sew.module);
     let trimsFound = Boolean(trims);
     let trimsStatus = trims ? String(trims.status || '').toUpperCase() : '';
-
-    const isModuleMasterOk = Boolean(cleanMod && moduleTrimsStatusMap.get(cleanMod) === 'OK');
-    const isModuleDateOk = Boolean(cleanMod && sew.plannedDate && moduleDateTrimsMap.get(`${cleanMod}_${sew.plannedDate}`) === 'OK');
-
     let trimsReady = false;
 
-    if (isModuleDateOk || isModuleMasterOk) {
+    const dateKey = cleanMod && sew.plannedDate ? `${cleanMod}_${sew.plannedDate}` : '';
+    const hasDateSpecificStatus = dateKey && moduleDateTrimsMap.has(dateKey);
+    const dateSpecificStatus = hasDateSpecificStatus ? moduleDateTrimsMap.get(dateKey) : null;
+    const isModuleMasterOk = Boolean(cleanMod && moduleTrimsStatusMap.get(cleanMod) === 'OK');
+
+    if (hasDateSpecificStatus) {
+      trimsFound = true;
+      trimsStatus = dateSpecificStatus || 'NO';
+      trimsReady = isTrimsReady(trimsStatus);
+    } else if (trimsFound) {
+      trimsReady = isTrimsReady(trimsStatus);
+    } else if (isModuleMasterOk) {
       trimsFound = true;
       trimsStatus = 'OK';
       trimsReady = true;
-    } else if (trimsFound) {
-      trimsReady = isTrimsReady(trimsStatus);
     } else if (cleanMod && moduleTrimsStatusMap.has(cleanMod)) {
       trimsFound = true;
-      trimsStatus = moduleTrimsStatusMap.get(cleanMod) || 'OK';
+      trimsStatus = moduleTrimsStatusMap.get(cleanMod) || 'NO';
       trimsReady = isTrimsReady(trimsStatus);
     }
 

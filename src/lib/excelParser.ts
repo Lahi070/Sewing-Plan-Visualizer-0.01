@@ -333,30 +333,37 @@ export function parseTrimReadinessMatrixSheet(worksheet: XLSX.WorkSheet, current
       const cellStr = String(cellVal || '').trim();
       const cellNum = Number(cellVal);
 
+      let cellStatus = 'NO';
       if ((!isNaN(cellNum) && cellNum > 0) || cellStr.toLowerCase() === 'plan' || cellStr.toLowerCase() === 'ok' || cellStr.toLowerCase() === 'green') {
+        cellStatus = 'GREEN';
         hasAnyReady = true;
-        rows.push({
-          soli: `MODULE_${moduleNo}_${dc.dateStr}`,
-          module: moduleNo,
-          customer: '',
-          product: '',
-          cw: '',
-          status: 'GREEN',
-          psd: dc.dateStr,
-          ped: dc.dateStr,
-          sheetName: 'Trim readiness status',
-        });
+      } else if (cellStr !== '') {
+        cellStatus = cellStr; // Could be 'Not plan', etc.
+      } else {
+        cellStatus = 'NO'; // Blank means not ready for that date
       }
-    }
 
-    if (hasAnyReady || moduleNo) {
       rows.push({
-        soli: `MODULE_READY_${moduleNo}`,
+        soli: `MODULE_${moduleNo}_${dc.dateStr}`,
         module: moduleNo,
         customer: '',
         product: '',
         cw: '',
-        status: 'GREEN',
+        status: cellStatus,
+        psd: dc.dateStr,
+        ped: dc.dateStr,
+        sheetName: 'Trim readiness status',
+      });
+    }
+
+    if (hasAnyReady || moduleNo) {
+      rows.push({
+        soli: `MODULE_MASTER_${moduleNo}`,
+        module: moduleNo,
+        customer: '',
+        product: '',
+        cw: '',
+        status: hasAnyReady ? 'GREEN' : 'NO',
         psd: '',
         ped: '',
         sheetName: 'Trim readiness status',
