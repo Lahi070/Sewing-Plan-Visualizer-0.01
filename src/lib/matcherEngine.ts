@@ -7,7 +7,7 @@ import {
   ModuleSummary,
   ReadinessStatus,
 } from './types';
-import { normalizeSoLi } from './excelParser';
+import { normalizeSoLi, normalizeModuleName } from './excelParser';
 
 /**
  * Calculates day difference between target date and anchor date
@@ -20,7 +20,6 @@ export function calculateDaysRemaining(targetDateStr: string, anchorDate: Date =
   const target = new Date(targetDateStr);
   if (isNaN(target.getTime())) return 999;
 
-  // Compare calendar days
   const anchorMidnight = new Date(anchorDate.getFullYear(), anchorDate.getMonth(), anchorDate.getDate());
   const targetMidnight = new Date(target.getFullYear(), target.getMonth(), target.getDate());
 
@@ -102,6 +101,8 @@ export function evaluateReadiness(
     }
     if (k.so_li) {
       knitMap.set(k.so_li.trim(), k);
+      knitMap.set(k.so_li.replace(/\s+/g, ''), k);
+      knitMap.set(k.so_li.replace(/^0+/, ''), k);
     }
   }
 
@@ -117,21 +118,22 @@ export function evaluateReadiness(
     }
     if (t.soli) {
       trimsMap.set(t.soli.trim(), t);
+      trimsMap.set(t.soli.replace(/\s+/g, ''), t);
+      trimsMap.set(t.soli.replace(/^0+/, ''), t);
     }
 
     const tStatus = isTrimsReady(t.status) ? 'OK' : 'NO';
-    const mod = String(t.module || '').trim().toUpperCase();
+    const cleanMod = normalizeModuleName(t.module);
 
-    if (mod) {
-      if (tStatus === 'OK' || !moduleTrimsStatusMap.has(mod)) {
-        moduleTrimsStatusMap.set(mod, tStatus);
+    if (cleanMod) {
+      if (tStatus === 'OK' || !moduleTrimsStatusMap.has(cleanMod)) {
+        moduleTrimsStatusMap.set(cleanMod, tStatus);
       }
-
       if (t.psd) {
-        moduleDateTrimsMap.set(`${mod}_${t.psd}`, tStatus);
+        moduleDateTrimsMap.set(`${cleanMod}_${t.psd}`, tStatus);
       }
       if (t.ped) {
-        moduleDateTrimsMap.set(`${mod}_${t.ped}`, tStatus);
+        moduleDateTrimsMap.set(`${cleanMod}_${t.ped}`, tStatus);
       }
     }
   }
@@ -166,10 +168,10 @@ export function evaluateReadiness(
 
   for (const sew of safeSewing) {
     const normKey = normalizeSoLi(sew.so_li);
-    let knit = knitMap.get(normKey) || knitMap.get(sew.so_li?.trim());
-    let trims = trimsMap.get(normKey) || trimsMap.get(sew.so_li?.trim());
+    let knit = knitMap.get(normKey) || knitMap.get(sew.so_li?.trim()) || knitMap.get(sew.so_li?.replace(/\s+/g, ''));
+    let trims = trimsMap.get(normKey) || trimsMap.get(sew.so_li?.trim()) || trimsMap.get(sew.so_li?.replace(/\s+/g, ''));
 
-    // 1. Evaluate Knitting Side (Check SM WIP, Knit Qty, PKIN Qty, QC Qty)
+    // 1. Evaluate Knitting Side (SM WIP, Knit Qty, PKIN Qty, QC Qty)
     const knitFound = Boolean(knit);
     const knitSmWip = knit
       ? Math.max(
@@ -181,19 +183,18 @@ export function evaluateReadiness(
       : 0;
     const knitReady = knitFound && knitSmWip >= sew.qty;
 
-    // 2. Evaluate Trims Side
+    // 2. Evaluate Trims Side (Item match or Module-Level Matrix Fallback)
     let trimsFound = Boolean(trims);
     let trimsStatus = trims ? String(trims.status || 'NO').toUpperCase() : '';
 
-    // Multi-level fallback: Match by Module & Date or Module overall status
-    if (!trimsFound && sew.module) {
-      const mod = sew.module.toUpperCase();
-      if (sew.plannedDate && moduleDateTrimsMap.has(`${mod}_${sew.plannedDate}`)) {
+    const cleanMod = normalizeModuleName(sew.module);
+    if (!trimsFound && cleanMod) {
+      if (sew.plannedDate && moduleDateTrimsMap.has(`${cleanMod}_${sew.plannedDate}`)) {
         trimsFound = true;
-        trimsStatus = moduleDateTrimsMap.get(`${mod}_${sew.plannedDate}`) || 'OK';
-      } else if (moduleTrimsStatusMap.has(mod)) {
+        trimsStatus = moduleDateTrimsMap.get(`${cleanMod}_${sew.plannedDate}`) || 'OK';
+      } else if (moduleTrimsStatusMap.has(cleanMod)) {
         trimsFound = true;
-        trimsStatus = moduleTrimsStatusMap.get(mod) || 'OK';
+        trimsStatus = moduleTrimsStatusMap.get(cleanMod) || 'OK';
       }
     }
 
@@ -245,8 +246,8 @@ export function evaluateReadiness(
     }
 
     const itemObj: MatchedReadinessItem = {
-      id: `${sew.module}_${sew.so_li}_${sew.plannedDate}_${Math.random().toString(36).substr(2, 4)}`,
-      module: sew.module || 'M01',
+      id: `${cleanMod || sew.module}_${sew.so_li}_${sew.plannedDate}_${Math.random().toString(36).substr(2, 4)}`,
+      module: cleanMod || sew.module || 'M01',
       customer: sew.customer || trims?.customer || '',
       style: sew.style || trims?.product || '',
       productType: sew.productType || '',
@@ -282,7 +283,7 @@ export function evaluateReadiness(
     items.push(itemObj);
 
     // Module Aggregator
-    const m = sew.module || 'M01';
+    const m = cleanMod || sew.module || 'M01';
     if (!moduleAgg[m]) {
       moduleAgg[m] = {
         module: m,

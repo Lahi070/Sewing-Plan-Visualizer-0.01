@@ -2,6 +2,20 @@ import * as XLSX from 'xlsx';
 import { SewingPlanRow, KnittingPlanRow, TrimsPlanRow } from './types';
 
 /**
+ * Normalizes Module strings e.g. "M7", "Module 07", "Line 7", "07", "M-07" -> "M07"
+ */
+export function normalizeModuleName(modStr?: any): string {
+  if (!modStr) return '';
+  const str = String(modStr).trim().toUpperCase();
+  const digits = str.replace(/\D/g, '');
+  if (digits) {
+    const num = parseInt(digits, 10);
+    return `M${String(num).padStart(2, '0')}`;
+  }
+  return str;
+}
+
+/**
  * Normalizes any Sales Order and Line Item variation into standard "cleanSo/cleanLi"
  */
 export function normalizeSoLi(rawSoLi?: any, rawSo?: any, rawLi?: any): string {
@@ -161,10 +175,7 @@ export function parseSewingPlanWorkbook(workbook: XLSX.WorkBook): {
     }
 
     const moduleRaw = r['Module'] ?? r['Module#'] ?? r['module'] ?? r['Line'] ?? r['Line#'] ?? r['Module No'] ?? 'M01';
-    let moduleNo = String(moduleRaw).trim().toUpperCase();
-    if (!moduleNo.startsWith('M') && /^\d+$/.test(moduleNo)) {
-      moduleNo = `M${moduleNo.padStart(2, '0')}`;
-    }
+    const moduleNo = normalizeModuleName(moduleRaw) || 'M01';
 
     const so_li = extractRowSoLi(r);
     const plannedDate = parseExcelDate(r['Date'] ?? r['date'] ?? r['Planned Date'] ?? r['Sewing Date'] ?? r['PSD']);
@@ -175,7 +186,7 @@ export function parseSewingPlanWorkbook(workbook: XLSX.WorkBook): {
     }
 
     rows.push({
-      module: moduleNo || 'M01',
+      module: moduleNo,
       customer: String(r['Customer'] ?? r['customer'] ?? r['Buyer'] ?? '').trim(),
       style: String(r['Style'] ?? r['style'] ?? r['Style#'] ?? r['Product'] ?? '').trim(),
       productType: String(r['Produt Type'] ?? r['Product Type'] ?? r['Cat'] ?? r['Category'] ?? '').trim(),
@@ -193,7 +204,6 @@ export function parseSewingPlanWorkbook(workbook: XLSX.WorkBook): {
 
 /**
  * 2. Parse Knitting WIP file
- * Checks SM WIP, Knit Qty, PKIN Qty, QC Qty across size variants
  */
 export function parseKnittingWipWorkbook(workbook: XLSX.WorkBook): {
   rows: KnittingPlanRow[];
@@ -311,13 +321,11 @@ export function parseTrimReadinessMatrixSheet(worksheet: XLSX.WorkSheet, current
     const row = rawTable[i];
     if (!row || row.length === 0) continue;
 
-    const rawMod = String(row[moduleColIdx] || '').trim().toUpperCase();
+    const rawMod = String(row[moduleColIdx] || '').trim();
     if (!rawMod || rawMod.toLowerCase().includes('total')) continue;
 
-    let moduleNo = rawMod;
-    if (!moduleNo.startsWith('M') && /^\d+$/.test(moduleNo)) {
-      moduleNo = `M${moduleNo.padStart(2, '0')}`;
-    }
+    const moduleNo = normalizeModuleName(rawMod);
+    if (!moduleNo) continue;
 
     let hasAnyReady = false;
     for (const dc of dateCols) {
@@ -533,7 +541,8 @@ export function parseTrimsReadinessWorkbook(
       const ped = parseExcelDate(getColVal(row, ['PED', 'Plan End Date', 'Trims Date', 'Delivery Date']));
       const daysLate = Number(getColVal(row, ['Days Late', 'Late Days', 'Delay'])) || 0;
 
-      const moduleRaw = String(getColVal(row, ['Module', 'Module#', 'Line'])).trim().toUpperCase();
+      const rawModule = String(getColVal(row, ['Module', 'Module#', 'Line'])).trim();
+      const moduleNo = normalizeModuleName(rawModule);
       const customer = String(getColVal(row, ['Customer', 'Buyer'])).trim();
       const product = String(getColVal(row, ['Product', 'Style', 'Item'])).trim();
       const cw = String(getColVal(row, ['CW', 'Color'])).trim();
@@ -543,7 +552,7 @@ export function parseTrimsReadinessWorkbook(
         seenSoli.add(soli);
         rows.push({
           soli,
-          module: moduleRaw,
+          module: moduleNo || rawModule,
           customer,
           product,
           cw,
