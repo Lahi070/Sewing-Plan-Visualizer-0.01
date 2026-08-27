@@ -92,17 +92,31 @@ export function evaluateReadiness(
   const safeKnitting = Array.isArray(knittingPlan) ? knittingPlan : [];
   const safeTrims = Array.isArray(trimsPlan) ? trimsPlan : [];
 
-  // 1. Build fast Lookup Map for Knitting WIP with Normalized Keys
+  // 1. Build fast Lookup Map for Knitting WIP with Normalized Keys & SO Fallback
   const knitMap = new Map<string, KnittingPlanRow>();
+  const soKnitMap = new Map<string, KnittingPlanRow>();
+
   for (const k of safeKnitting) {
     const norm = normalizeSoLi(k.so_li, k.salesOrder, k.lineItem);
     if (norm) {
       knitMap.set(norm, k);
+      const soOnly = norm.split('/')[0];
+      if (soOnly && !soKnitMap.has(soOnly)) {
+        soKnitMap.set(soOnly, k);
+      }
     }
     if (k.so_li) {
-      knitMap.set(k.so_li.trim(), k);
-      knitMap.set(k.so_li.replace(/\s+/g, ''), k);
-      knitMap.set(k.so_li.replace(/^0+/, ''), k);
+      const cleanKey = k.so_li.trim();
+      knitMap.set(cleanKey, k);
+      knitMap.set(cleanKey.replace(/\s+/g, ''), k);
+      knitMap.set(cleanKey.replace(/^0+/, ''), k);
+      const soOnly = cleanKey.split('/')[0];
+      if (soOnly && !soKnitMap.has(soOnly)) {
+        soKnitMap.set(soOnly, k);
+      }
+    }
+    if (k.salesOrder && !soKnitMap.has(k.salesOrder.trim())) {
+      soKnitMap.set(k.salesOrder.trim(), k);
     }
   }
 
@@ -117,9 +131,10 @@ export function evaluateReadiness(
       trimsMap.set(norm, t);
     }
     if (t.soli) {
-      trimsMap.set(t.soli.trim(), t);
-      trimsMap.set(t.soli.replace(/\s+/g, ''), t);
-      trimsMap.set(t.soli.replace(/^0+/, ''), t);
+      const cleanKey = t.soli.trim();
+      trimsMap.set(cleanKey, t);
+      trimsMap.set(cleanKey.replace(/\s+/g, ''), t);
+      trimsMap.set(cleanKey.replace(/^0+/, ''), t);
     }
 
     const tStatus = isTrimsReady(t.status) ? 'OK' : 'NO';
@@ -168,15 +183,24 @@ export function evaluateReadiness(
 
   for (const sew of safeSewing) {
     const normKey = normalizeSoLi(sew.so_li);
-    let knit = knitMap.get(normKey) || knitMap.get(sew.so_li?.trim()) || knitMap.get(sew.so_li?.replace(/\s+/g, ''));
-    let trims = trimsMap.get(normKey) || trimsMap.get(sew.so_li?.trim()) || trimsMap.get(sew.so_li?.replace(/\s+/g, ''));
+    const soOnly = normKey ? normKey.split('/')[0] : (sew.so_li ? sew.so_li.split('/')[0] : '');
 
-    // 1. Evaluate Knitting Side (SM WIP, Knit Qty, PKIN Qty, QC Qty)
+    let knit = knitMap.get(normKey) 
+            || knitMap.get(sew.so_li?.trim()) 
+            || knitMap.get(sew.so_li?.replace(/\s+/g, ''))
+            || (soOnly ? soKnitMap.get(soOnly) : undefined);
+
+    let trims = trimsMap.get(normKey) 
+             || trimsMap.get(sew.so_li?.trim()) 
+             || trimsMap.get(sew.so_li?.replace(/\s+/g, ''));
+
+    // 1. Evaluate Knitting Side (SM WIP, Knit Qty, Order Qty, PKIN Qty, QC Qty)
     const knitFound = Boolean(knit);
     const knitSmWip = knit
       ? Math.max(
           Number(knit.smWipTotal) || 0,
           Number(knit.knitQtyTotal) || 0,
+          Number(knit.orderQtyTotal) || 0,
           Number(knit.pkinQtyTotal) || 0,
           Number(knit.qcQtyTotal) || 0
         )
