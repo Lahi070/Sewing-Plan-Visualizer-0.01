@@ -474,7 +474,7 @@ export function parseTrimsReadinessWorkbook(
   // 2. Scan all item detail sheets
   const sheetsToScan = [targetSheet];
   for (const s of workbook.SheetNames) {
-    if (!sheetsToScan.includes(s) && !s.toLowerCase().includes('pivot')) {
+    if (!sheetsToScan.includes(s) && !s.toLowerCase().includes('pivot') && !s.toLowerCase().includes('readiness status')) {
       sheetsToScan.push(s);
     }
   }
@@ -528,20 +528,32 @@ export function parseTrimsReadinessWorkbook(
       if (!soli) continue;
 
       let rawStatus = String(
-        getColVal(row, ['Status', 'Trims Status', 'Status (OK/NO)', 'Readiness', 'Allocation', 'Trim Status', 'Allocation Status'])
+        getColVal(row, [
+          'Status', 'Trims Status', 'Status (OK/NO)', 'Readiness', 'Allocation',
+          'Trim Status', 'Allocation Status', 'Trim Readiness', 'RMW Status', 'RMW',
+          'Color', 'Trim', 'Trims'
+        ])
       ).trim().toUpperCase();
 
-      if (rawStatus === '0' || rawStatus === 'GREEN' || rawStatus === 'ALLOCATED' || rawStatus === 'READY' || rawStatus === '1' || rawStatus === 'YES') {
-        rawStatus = 'OK';
-      } else if (rawStatus === 'RED' || rawStatus === 'FAIL' || rawStatus === 'SHORTAGE' || rawStatus === 'NOT READY') {
+      if (
+        rawStatus.includes('RED') ||
+        rawStatus.includes('NO') ||
+        rawStatus.includes('FAIL') ||
+        rawStatus.includes('SHORT') ||
+        rawStatus.includes('NOT') ||
+        rawStatus.includes('HOLD') ||
+        rawStatus.includes('DELAY')
+      ) {
         rawStatus = 'NO';
+      } else {
+        rawStatus = 'OK';
       }
 
       const psd = parseExcelDate(getColVal(row, ['PSD', 'Plan Sewing Date', 'Planned Date', 'Start Date']));
       const ped = parseExcelDate(getColVal(row, ['PED', 'Plan End Date', 'Trims Date', 'Delivery Date']));
       const daysLate = Number(getColVal(row, ['Days Late', 'Late Days', 'Delay'])) || 0;
 
-      const rawModule = String(getColVal(row, ['Module', 'Module#', 'Line'])).trim();
+      const rawModule = String(getColVal(row, ['Module', 'Module No', 'Module#', 'Module #', 'Line', 'Line No', 'Line#'])).trim();
       const moduleNo = normalizeModuleName(rawModule);
       const customer = String(getColVal(row, ['Customer', 'Buyer'])).trim();
       const product = String(getColVal(row, ['Product', 'Style', 'Item'])).trim();

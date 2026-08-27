@@ -31,18 +31,24 @@ export function calculateDaysRemaining(targetDateStr: string, anchorDate: Date =
  * Checks if trims status is Green / OK / Allocated
  */
 export function isTrimsReady(status: string | undefined): boolean {
-  if (!status) return false;
+  if (status === undefined || status === null) return true;
   const s = String(status).trim().toUpperCase();
-  return (
-    s === 'OK' ||
-    s === 'GREEN' ||
-    s === 'ALLOCATED' ||
-    s === 'READY' ||
-    s === 'YES' ||
-    s === '0' ||
-    s === '1' ||
-    s === 'PASS'
-  );
+  if (!s || s === '0' || s === '1' || s === 'OK' || s === 'GREEN' || s === 'ALLOCATED' || s === 'READY' || s === 'YES' || s === 'PASS') {
+    return true;
+  }
+  if (
+    s.includes('RED') ||
+    s.includes('NO') ||
+    s.includes('FAIL') ||
+    s.includes('SHORT') ||
+    s.includes('NOT') ||
+    s.includes('HOLD') ||
+    s.includes('DELAY') ||
+    s.includes('LATE')
+  ) {
+    return false;
+  }
+  return true;
 }
 
 /**
@@ -207,22 +213,27 @@ export function evaluateReadiness(
       : 0;
     const knitReady = knitFound && knitSmWip >= sew.qty;
 
-    // 2. Evaluate Trims Side (Item match or Module-Level Matrix Fallback)
-    let trimsFound = Boolean(trims);
-    let trimsStatus = trims ? String(trims.status || 'NO').toUpperCase() : '';
-
+    // 2. Evaluate Trims Side (Master Module Status + Date + Item Hierarchy)
     const cleanMod = normalizeModuleName(sew.module);
-    if (!trimsFound && cleanMod) {
-      if (sew.plannedDate && moduleDateTrimsMap.has(`${cleanMod}_${sew.plannedDate}`)) {
-        trimsFound = true;
-        trimsStatus = moduleDateTrimsMap.get(`${cleanMod}_${sew.plannedDate}`) || 'OK';
-      } else if (moduleTrimsStatusMap.has(cleanMod)) {
-        trimsFound = true;
-        trimsStatus = moduleTrimsStatusMap.get(cleanMod) || 'OK';
-      }
-    }
+    let trimsFound = Boolean(trims);
+    let trimsStatus = trims ? String(trims.status || '').toUpperCase() : '';
 
-    const trimsReady = trimsFound && isTrimsReady(trimsStatus);
+    const isModuleMasterOk = Boolean(cleanMod && moduleTrimsStatusMap.get(cleanMod) === 'OK');
+    const isModuleDateOk = Boolean(cleanMod && sew.plannedDate && moduleDateTrimsMap.get(`${cleanMod}_${sew.plannedDate}`) === 'OK');
+
+    let trimsReady = false;
+
+    if (isModuleDateOk || isModuleMasterOk) {
+      trimsFound = true;
+      trimsStatus = 'OK';
+      trimsReady = true;
+    } else if (trimsFound) {
+      trimsReady = isTrimsReady(trimsStatus);
+    } else if (cleanMod && moduleTrimsStatusMap.has(cleanMod)) {
+      trimsFound = true;
+      trimsStatus = moduleTrimsStatusMap.get(cleanMod) || 'OK';
+      trimsReady = isTrimsReady(trimsStatus);
+    }
 
     const diffDays = calculateDaysRemaining(sew.plannedDate, anchorDate);
     totalQtyNeeded += Number(sew.qty) || 0;
