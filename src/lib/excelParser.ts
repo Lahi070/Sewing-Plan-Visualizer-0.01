@@ -160,6 +160,8 @@ export function parseSewingPlanWorkbook(workbook: XLSX.WorkBook): {
   const rawRows: any[] = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
   const rows: SewingPlanRow[] = [];
   let totalSkipped = 0;
+  
+  let lastModuleName = 'M01';
 
   for (const r of rawRows) {
     const rawQty = r['Qty'] ?? r['qty'] ?? r['QTY'] ?? r['Planned Qty'] ?? r['Sew Qty'] ?? r['Quantity'];
@@ -174,8 +176,11 @@ export function parseSewingPlanWorkbook(workbook: XLSX.WorkBook): {
       continue;
     }
 
-    const moduleRaw = r['Module'] ?? r['Module#'] ?? r['module'] ?? r['Line'] ?? r['Line#'] ?? r['Module No'] ?? 'M01';
-    const moduleNo = normalizeModuleName(moduleRaw) || 'M01';
+    const moduleRaw = r['Module'] ?? r['Module#'] ?? r['module'] ?? r['Line'] ?? r['Line#'] ?? r['Module No'];
+    if (moduleRaw !== undefined && moduleRaw !== null && String(moduleRaw).trim() !== '') {
+      lastModuleName = normalizeModuleName(String(moduleRaw)) || 'M01';
+    }
+    const moduleNo = lastModuleName;
 
     const so_li = extractRowSoLi(r);
     const plannedDate = parseExcelDate(r['Date'] ?? r['date'] ?? r['Planned Date'] ?? r['Sewing Date'] ?? r['PSD']);
