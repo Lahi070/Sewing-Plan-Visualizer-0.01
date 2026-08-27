@@ -357,6 +357,8 @@ export function parseTrimReadinessMatrixSheet(worksheet: XLSX.WorkSheet, current
         product: '',
         cw: '',
         status: 'GREEN',
+        psd: '',
+        ped: '',
         sheetName: 'Trim readiness status',
       });
     }
