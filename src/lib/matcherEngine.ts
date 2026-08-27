@@ -2,126 +2,203 @@ import {
   SewingPlanRow,
   KnittingPlanRow,
   TrimsPlanRow,
-  MatchedReadinessItem,
-  OverallMetrics,
+  ReadinessItem,
+  ReadinessMetrics,
   ModuleSummary,
   ReadinessStatus,
 } from './types';
+import { normalizeSoLi } from './excelParser';
 
 /**
- * Cross-references Sewing, Knitting, and Trims datasets
- * to determine readiness per Module / SO_LI / Date.
+ * Calculates day difference between target date and anchor date
+ * diffDays <= 0: Today or Overdue
+ * diffDays 1..3: At Risk window (within 3 days)
+ * diffDays > 3: Upcoming
+ */
+export function calculateDaysRemaining(targetDateStr: string, anchorDate: Date = new Date()): number {
+  if (!targetDateStr) return 999;
+  const target = new Date(targetDateStr);
+  if (isNaN(target.getTime())) return 999;
+
+  // Compare calendar days
+  const anchorMidnight = new Date(anchorDate.getFullYear(), anchorDate.getMonth(), anchorDate.getDate());
+  const targetMidnight = new Date(target.getFullYear(), target.getMonth(), target.getDate());
+
+  const diffMs = targetMidnight.getTime() - anchorMidnight.getTime();
+  return Math.round(diffMs / (1000 * 60 * 60 * 24));
+}
+
+/**
+ * Helper to build clear reason messages for floor operators
+ */
+function buildIssueReason(
+  knitFound: boolean,
+  knitReady: boolean,
+  knitSmWip: number,
+  qtyNeeded: number,
+  trimsFound: boolean,
+  trimsReady: boolean,
+  trimsStatus: string,
+  trimsPedDelayed: boolean
+): string {
+  const issues: string[] = [];
+
+  if (!knitFound) {
+    issues.push('Knitting WIP not found');
+  } else if (!knitReady) {
+    issues.push(`Knit short (${knitSmWip}/${qtyNeeded} pcs)`);
+  }
+
+  if (!trimsFound) {
+    issues.push('Trims verification pending');
+  } else if (!trimsReady) {
+    if (trimsPedDelayed) {
+      issues.push('Trims delivery date after sewing date');
+    } else {
+      issues.push(`Trims status: ${trimsStatus || 'NO'}`);
+    }
+  }
+
+  if (issues.length === 0) return 'Prerequisites verified';
+  return issues.join(' • ');
+}
+
+/**
+ * Core Cross-Referencing Matching Engine
  */
 export function evaluateReadiness(
-  sewingRows: SewingPlanRow[],
-  knittingRows: KnittingPlanRow[],
-  trimsRows: TrimsPlanRow[],
-  currentDateStr?: string
+  sewingPlan: SewingPlanRow[],
+  knittingPlan: KnittingPlanRow[],
+  trimsPlan: TrimsPlanRow[],
+  anchorDate: Date = new Date()
 ): {
-  items: MatchedReadinessItem[];
-  metrics: OverallMetrics;
+  items: ReadinessItem[];
+  metrics: ReadinessMetrics;
   moduleSummaries: ModuleSummary[];
 } {
-  // Normalize reference date
-  const today = currentDateStr ? new Date(currentDateStr) : new Date();
-  today.setHours(0, 0, 0, 0);
-
-  // 1. Build fast lookup indexes
+  // 1. Build fast Lookup Map for Knitting WIP with Normalized Keys
   const knitMap = new Map<string, KnittingPlanRow>();
-  for (const k of knittingRows) {
-    const key = k.so_li.trim();
-    if (key) knitMap.set(key, k);
+  for (const k of knittingPlan) {
+    const norm = normalizeSoLi(k.so_li, k.salesOrder, k.lineItem);
+    if (norm) {
+      knitMap.set(norm, k);
+    }
+    // Also store raw so_li as fallback
+    if (k.so_li) {
+      knitMap.set(k.so_li.trim(), k);
+    }
   }
 
+  // 2. Build fast Lookup Map for Trims Readiness with Normalized Keys
   const trimsMap = new Map<string, TrimsPlanRow>();
-  for (const t of trimsRows) {
-    const key = t.soli.trim();
-    if (key) trimsMap.set(key, t);
+  for (const t of trimsPlan) {
+    const norm = normalizeSoLi(t.soli);
+    if (norm) {
+      trimsMap.set(norm, t);
+    }
+    if (t.soli) {
+      trimsMap.set(t.soli.trim(), t);
+    }
   }
 
-  const items: MatchedReadinessItem[] = [];
-
+  const items: ReadinessItem[] = [];
   let readyCount = 0;
   let atRiskCount = 0;
   let notReadyCount = 0;
   let upcomingCount = 0;
   let noDataCount = 0;
-  let totalQtyNeeded = 0;
 
-  for (const sew of sewingRows) {
-    const key = sew.so_li.trim();
-    totalQtyNeeded += sew.qty;
+  // Module summaries aggregator
+  const moduleAgg: Record<
+    string,
+    {
+      module: string;
+      totalItems: number;
+      readyCount: number;
+      atRiskCount: number;
+      notReadyCount: number;
+      upcomingCount: number;
+      noDataCount: number;
+      totalQty: number;
+      knitCompletedQty: number;
+      knitTotalNeededQty: number;
+      trimsOkCount: number;
+      trimsTotalCount: number;
+      items: ReadinessItem[];
+    }
+  > = {};
 
-    const knit = knitMap.get(key);
-    const trims = trimsMap.get(key);
+  for (const sew of sewingPlan) {
+    const normKey = normalizeSoLi(sew.so_li);
+    const knit = knitMap.get(normKey) || knitMap.get(sew.so_li.trim());
+    const trims = trimsMap.get(normKey) || trimsMap.get(sew.so_li.trim());
 
-    const knitFound = !!knit;
-    const trimsFound = !!trims;
+    const diffDays = calculateDaysRemaining(sew.plannedDate, anchorDate);
 
+    // 1. Evaluate Knitting Side
+    const knitFound = Boolean(knit);
     const knitSmWip = knit ? knit.smWipTotal : 0;
     const knitReady = knitFound && knitSmWip >= sew.qty;
 
-    const trimsStatus = trims ? trims.status : '';
+    // 2. Evaluate Trims Side
+    const trimsFound = Boolean(trims);
+    const trimsStatus = trims ? String(trims.status || 'NO').toUpperCase() : '';
     let trimsPedDelayed = false;
-
-    // Evaluate Trims PED vs Planned Sewing Date
     if (trims && trims.ped && sew.plannedDate) {
-      const pedDate = new Date(trims.ped);
-      const sewDate = new Date(sew.plannedDate);
-      if (!isNaN(pedDate.getTime()) && !isNaN(sewDate.getTime())) {
-        if (pedDate > sewDate) {
-          trimsPedDelayed = true;
-        }
+      const sewTime = new Date(sew.plannedDate).getTime();
+      const pedTime = new Date(trims.ped).getTime();
+      if (!isNaN(sewTime) && !isNaN(pedTime) && pedTime > sewTime) {
+        trimsPedDelayed = true;
       }
     }
+    const trimsReady = trimsFound && (trimsStatus === 'OK' || trimsStatus === '0') && !trimsPedDelayed;
 
-    const trimsReady = trimsFound && trimsStatus === 'OK' && !trimsPedDelayed;
-
-    // Calculate difference in days to planned sewing date
-    let diffDays = 999;
-    if (sew.plannedDate) {
-      const sewDate = new Date(sew.plannedDate);
-      sewDate.setHours(0, 0, 0, 0);
-      if (!isNaN(sewDate.getTime())) {
-        diffDays = Math.ceil((sewDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-      }
-    }
-
-    // Determine Overall Status
+    // 3. Determine Overall Status
     let overallStatus: ReadinessStatus = 'UPCOMING';
     let statusReason = '';
 
-    if (!knitFound && !trimsFound) {
-      overallStatus = 'NO_DATA';
-      statusReason = 'SO_LI missing from both Knitting and Trims records';
-      noDataCount++;
-    } else if (!knitFound) {
-      overallStatus = 'NO_DATA';
-      statusReason = 'SO_LI not found in Knitting WIP file';
-      noDataCount++;
-    } else if (!trimsFound) {
-      overallStatus = 'NO_DATA';
-      statusReason = 'SO_LI not found in Trims Readiness sheet';
-      noDataCount++;
-    } else if (knitReady && trimsReady) {
+    if (knitReady && trimsReady) {
+      // Both completely ready!
       overallStatus = 'READY';
       statusReason = `Ready: Knit (${sew.qty}/${knitSmWip} pcs) & Trims OK`;
       readyCount++;
-    } else if (diffDays <= 0) {
-      overallStatus = 'NOT_READY';
-      statusReason = buildIssueReason(knitReady, knitSmWip, sew.qty, trimsReady, trimsStatus, trimsPedDelayed);
-      notReadyCount++;
-    } else if (diffDays <= 3) {
-      overallStatus = 'AT_RISK';
-      statusReason = buildIssueReason(knitReady, knitSmWip, sew.qty, trimsReady, trimsStatus, trimsPedDelayed);
-      atRiskCount++;
+    } else if (knitFound || trimsFound) {
+      // At least one prerequisite file verified
+      if (diffDays <= 0) {
+        overallStatus = 'NOT_READY';
+        statusReason = buildIssueReason(knitFound, knitReady, knitSmWip, sew.qty, trimsFound, trimsReady, trimsStatus, trimsPedDelayed);
+        notReadyCount++;
+      } else if (diffDays <= 3) {
+        overallStatus = 'AT_RISK';
+        statusReason = buildIssueReason(knitFound, knitReady, knitSmWip, sew.qty, trimsFound, trimsReady, trimsStatus, trimsPedDelayed);
+        atRiskCount++;
+      } else {
+        overallStatus = 'UPCOMING';
+        statusReason = buildIssueReason(knitFound, knitReady, knitSmWip, sew.qty, trimsFound, trimsReady, trimsStatus, trimsPedDelayed);
+        upcomingCount++;
+      }
     } else {
-      overallStatus = 'UPCOMING';
-      statusReason = buildIssueReason(knitReady, knitSmWip, sew.qty, trimsReady, trimsStatus, trimsPedDelayed);
-      upcomingCount++;
+      // Order not found in either WIP sheet
+      if (diffDays <= 0) {
+        overallStatus = 'NOT_READY';
+        statusReason = 'Sewing date passed/today • No Knitting/Trims WIP confirmed';
+        notReadyCount++;
+      } else if (diffDays <= 3) {
+        overallStatus = 'AT_RISK';
+        statusReason = `Sewing in ${diffDays} day(s) • WIP records pending upload`;
+        atRiskCount++;
+      } else if (sew.plannedDate) {
+        overallStatus = 'UPCOMING';
+        statusReason = `Sewing in ${diffDays} days • Prerequisites pending`;
+        upcomingCount++;
+      } else {
+        overallStatus = 'NO_DATA';
+        statusReason = 'SO_LI missing from Knitting & Trims records';
+        noDataCount++;
+      }
     }
 
-    items.push({
+    const itemObj: ReadinessItem = {
       id: `${sew.module}_${sew.so_li}_${sew.plannedDate}_${Math.random().toString(36).substr(2, 4)}`,
       module: sew.module,
       customer: sew.customer || trims?.customer || '',
@@ -139,122 +216,92 @@ export function evaluateReadiness(
         ? {
             orderQty: knit.orderQtyTotal,
             knitQty: knit.knitQtyTotal,
+            pkinQty: knit.pkinQtyTotal,
+            qcQty: knit.qcQtyTotal,
+            shippedQty: knit.shippedQtyTotal,
             sizeCount: knit.sizeCount,
           }
         : undefined,
       trimsFound,
-      trimsStatus,
-      trimsPsd: trims?.psd || '',
-      trimsPed: trims?.ped || '',
+      trimsStatus: trimsStatus || (trimsFound ? 'OK' : 'PENDING'),
       trimsReady,
-      trimsPedDelayed,
-      trimsComments: {
-        rm: trims?.rmComments || '',
-        merch: trims?.merchComments || '',
-      },
+      trimsPed: trims?.ped,
+      trimsPsd: trims?.psd,
+      trimsDaysLate: trims?.daysLate || 0,
+      trimsComments: [trims?.rmComments, trims?.merchComments].filter(Boolean).join(' | '),
       overallStatus,
       statusReason,
-    });
-  }
+    };
 
-  // Sort items primarily by severity (NOT_READY -> AT_RISK -> UPCOMING -> READY -> NO_DATA), then date
-  const statusOrder: Record<ReadinessStatus, number> = {
-    NOT_READY: 0,
-    AT_RISK: 1,
-    UPCOMING: 2,
-    NO_DATA: 3,
-    READY: 4,
-  };
+    items.push(itemObj);
 
-  items.sort((a, b) => {
-    const diffStatus = statusOrder[a.overallStatus] - statusOrder[b.overallStatus];
-    if (diffStatus !== 0) return diffStatus;
-    return (a.plannedDate || '').localeCompare(b.plannedDate || '');
-  });
-
-  const totalItems = items.length;
-  const metrics: OverallMetrics = {
-    totalItems,
-    totalQtyNeeded,
-    readyCount,
-    atRiskCount,
-    notReadyCount,
-    upcomingCount,
-    noDataCount,
-    readyPercentage: totalItems > 0 ? Math.round((readyCount / totalItems) * 100) : 0,
-    atRiskPercentage: totalItems > 0 ? Math.round((atRiskCount / totalItems) * 100) : 0,
-    notReadyPercentage: totalItems > 0 ? Math.round((notReadyCount / totalItems) * 100) : 0,
-    urgentCount: atRiskCount + notReadyCount,
-  };
-
-  // Group by Module
-  const moduleMap = new Map<string, ModuleSummary>();
-  for (const item of items) {
-    if (!moduleMap.has(item.module)) {
-      moduleMap.set(item.module, {
-        module: item.module,
+    // Module Aggregator
+    const m = sew.module || 'M01';
+    if (!moduleAgg[m]) {
+      moduleAgg[m] = {
+        module: m,
         totalItems: 0,
-        totalQty: 0,
         readyCount: 0,
         atRiskCount: 0,
         notReadyCount: 0,
         upcomingCount: 0,
         noDataCount: 0,
+        totalQty: 0,
         knitCompletedQty: 0,
         knitTotalNeededQty: 0,
         trimsOkCount: 0,
         trimsTotalCount: 0,
         items: [],
-      });
+      };
     }
 
-    const m = moduleMap.get(item.module)!;
-    m.totalItems += 1;
-    m.totalQty += item.qtyNeeded;
-    m.items.push(item);
+    const mod = moduleAgg[m];
+    mod.totalItems += 1;
+    mod.totalQty += sew.qty;
+    mod.knitTotalNeededQty += sew.qty;
+    mod.knitCompletedQty += Math.min(sew.qty, knitSmWip);
+    if (trimsReady) mod.trimsOkCount += 1;
+    mod.trimsTotalCount += 1;
 
-    if (item.overallStatus === 'READY') m.readyCount++;
-    else if (item.overallStatus === 'AT_RISK') m.atRiskCount++;
-    else if (item.overallStatus === 'NOT_READY') m.notReadyCount++;
-    else if (item.overallStatus === 'UPCOMING') m.upcomingCount++;
-    else if (item.overallStatus === 'NO_DATA') m.noDataCount++;
+    if (overallStatus === 'READY') mod.readyCount += 1;
+    else if (overallStatus === 'AT_RISK') mod.atRiskCount += 1;
+    else if (overallStatus === 'NOT_READY') mod.notReadyCount += 1;
+    else if (overallStatus === 'UPCOMING') mod.upcomingCount += 1;
+    else if (overallStatus === 'NO_DATA') mod.noDataCount += 1;
 
-    // Module Dual-Side Calculations
-    m.knitCompletedQty += Math.min(item.knitSmWip, item.qtyNeeded);
-    m.knitTotalNeededQty += item.qtyNeeded;
-
-    m.trimsTotalCount += 1;
-    if (item.trimsFound && item.trimsStatus === 'OK' && !item.trimsPedDelayed) {
-      m.trimsOkCount += 1;
-    }
+    mod.items.push(itemObj);
   }
 
-  const moduleSummaries = Array.from(moduleMap.values()).sort((a, b) => {
-    // Sort modules naturally (M01, M02, ... M26)
-    return a.module.localeCompare(b.module, undefined, { numeric: true });
+  // Sort items by Planned Date ascending, then Module
+  items.sort((a, b) => {
+    if (a.plannedDate && b.plannedDate) {
+      const cmp = a.plannedDate.localeCompare(b.plannedDate);
+      if (cmp !== 0) return cmp;
+    }
+    return a.module.localeCompare(b.module);
+  });
+
+  const total = items.length || 1;
+  const metrics: ReadinessMetrics = {
+    totalRequirements: items.length,
+    ready: readyCount,
+    readyPct: Math.round((readyCount / total) * 100),
+    atRisk: atRiskCount,
+    atRiskPct: Math.round((atRiskCount / total) * 100),
+    notReady: notReadyCount,
+    notReadyPct: Math.round((notReadyCount / total) * 100),
+    upcoming: upcomingCount,
+    upcomingPct: Math.round((upcomingCount / total) * 100),
+    noData: noDataCount,
+    noDataPct: Math.round((noDataCount / total) * 100),
+  };
+
+  // Sort modules naturally: M01, M02, ... M26
+  const moduleSummaries: ModuleSummary[] = Object.values(moduleAgg).sort((a, b) => {
+    const numA = parseInt(a.module.replace(/\D/g, ''), 10) || 0;
+    const numB = parseInt(b.module.replace(/\D/g, ''), 10) || 0;
+    return numA - numB;
   });
 
   return { items, metrics, moduleSummaries };
-}
-
-function buildIssueReason(
-  knitReady: boolean,
-  knitWip: number,
-  qtyNeeded: number,
-  trimsReady: boolean,
-  trimsStatus: string,
-  trimsPedDelayed: boolean
-): string {
-  const issues: string[] = [];
-  if (!knitReady) {
-    issues.push(`Knit short (${qtyNeeded}/${knitWip} pcs)`);
-  }
-  if (!trimsReady) {
-    if (trimsStatus !== 'OK') {
-      issues.push(`Trims Status ${trimsStatus || 'NO'}`);
-    } else if (trimsPedDelayed) {
-      issues.push('Trims PED after sewing date');
-    }
-  }
-  return issues.join(' & ') || 'Prerequisites incomplete';
 }
