@@ -11,20 +11,14 @@ import { normalizeSoLi, normalizeModuleName } from './excelParser';
 
 /**
  * Calculates day difference between target date and anchor date
- * diffDays <= 0: Today or Overdue
- * diffDays 1..3: At Risk window (within 3 days)
- * diffDays > 3: Upcoming
  */
 export function calculateDaysRemaining(targetDateStr: string, anchorDate: Date = new Date()): number {
   if (!targetDateStr) return 999;
   const target = new Date(targetDateStr);
   if (isNaN(target.getTime())) return 999;
-
   const anchorMidnight = new Date(anchorDate.getFullYear(), anchorDate.getMonth(), anchorDate.getDate());
   const targetMidnight = new Date(target.getFullYear(), target.getMonth(), target.getDate());
-
-  const diffMs = targetMidnight.getTime() - anchorMidnight.getTime();
-  return Math.round(diffMs / (1000 * 60 * 60 * 24));
+  return Math.round((targetMidnight.getTime() - anchorMidnight.getTime()) / (1000 * 60 * 60 * 24));
 }
 
 /**
@@ -36,49 +30,19 @@ export function isTrimsReady(status: string | undefined): boolean {
   if (!s || s === '0' || s === '1' || s === 'OK' || s === 'GREEN' || s === 'ALLOCATED' || s === 'READY' || s === 'YES' || s === 'PASS') {
     return true;
   }
-  if (
-    s.includes('RED') ||
-    s.includes('NO') ||
-    s.includes('FAIL') ||
-    s.includes('SHORT') ||
-    s.includes('NOT') ||
-    s.includes('HOLD') ||
-    s.includes('DELAY') ||
-    s.includes('LATE')
-  ) {
+  if (s.includes('RED') || s.includes('NO') || s.includes('FAIL') || s.includes('SHORT') || s.includes('NOT') || s.includes('HOLD') || s.includes('DELAY') || s.includes('LATE')) {
     return false;
   }
   return true;
 }
 
-/**
- * Helper to build clear reason messages for floor operators
- */
-function buildIssueReason(
-  knitFound: boolean,
-  knitReady: boolean,
-  knitSmWip: number,
-  qtyNeeded: number,
-  trimsFound: boolean,
-  trimsReady: boolean,
-  trimsStatus: string
-): string {
+function buildIssueReason(knitFound: boolean, knitReady: boolean, knitSmWip: number, qtyNeeded: number, trimsFound: boolean, trimsReady: boolean, trimsStatus: string): string {
   const issues: string[] = [];
-
-  if (!knitFound) {
-    issues.push('Knitting WIP not found');
-  } else if (!knitReady) {
-    issues.push(`Knit short (${knitSmWip}/${qtyNeeded} pcs)`);
-  }
-
-  if (!trimsFound) {
-    issues.push('Trims verification pending');
-  } else if (!trimsReady) {
-    issues.push(`Trims allocation: ${trimsStatus || 'RED'}`);
-  }
-
-  if (issues.length === 0) return 'Prerequisites verified';
-  return issues.join(' • ');
+  if (!knitFound) issues.push('Knitting WIP not found');
+  else if (!knitReady) issues.push(`Knit short (${knitSmWip}/${qtyNeeded} pcs)`);
+  if (!trimsFound) issues.push('Trims verification pending');
+  else if (!trimsReady) issues.push(`Trims allocation: ${trimsStatus || 'RED'}`);
+  return issues.length === 0 ? 'Prerequisites verified' : issues.join(' • ');
 }
 
 /**
@@ -98,16 +62,10 @@ export function evaluateReadiness(
   const safeKnitting = Array.isArray(knittingPlan) ? knittingPlan : [];
   const safeTrims = Array.isArray(trimsPlan) ? trimsPlan : [];
 
-  // DIAGNOSTIC: Log data sizes
-  console.log('[MatcherEngine] Input sizes → Sewing:', safeSewing.length, 'Knitting:', safeKnitting.length, 'Trims:', safeTrims.length);
-  if (safeKnitting.length > 0) {
-    console.log('[MatcherEngine] First 3 knitting SO_LIs:', safeKnitting.slice(0, 3).map(k => k.so_li));
-    console.log('[MatcherEngine] First knitting row keys:', Object.keys(safeKnitting[0]));
-  } else {
-    console.warn('[MatcherEngine] ⚠️ KNITTING DATA IS EMPTY - this will cause 0% WIP');
-  }
+  // DIAGNOSTIC
+  console.log('[MatcherEngine] Input → Sewing:', safeSewing.length, 'Knitting:', safeKnitting.length, 'Trims:', safeTrims.length);
 
-  // 1. Build fast Lookup Map for Knitting WIP with Normalized Keys & SO Fallback
+  // ──── 1. KNITTING LOOKUP ────
   const knitMap = new Map<string, KnittingPlanRow>();
   const soKnitMap = new Map<string, KnittingPlanRow>();
 
@@ -116,9 +74,7 @@ export function evaluateReadiness(
     if (norm) {
       knitMap.set(norm, k);
       const soOnly = norm.split('/')[0];
-      if (soOnly && !soKnitMap.has(soOnly)) {
-        soKnitMap.set(soOnly, k);
-      }
+      if (soOnly && !soKnitMap.has(soOnly)) soKnitMap.set(soOnly, k);
     }
     if (k.so_li) {
       const cleanKey = k.so_li.trim();
@@ -126,26 +82,28 @@ export function evaluateReadiness(
       knitMap.set(cleanKey.replace(/\s+/g, ''), k);
       knitMap.set(cleanKey.replace(/^0+/, ''), k);
       const soOnly = cleanKey.split('/')[0];
-      if (soOnly && !soKnitMap.has(soOnly)) {
-        soKnitMap.set(soOnly, k);
-      }
+      if (soOnly && !soKnitMap.has(soOnly)) soKnitMap.set(soOnly, k);
     }
     if (k.salesOrder && !soKnitMap.has(k.salesOrder.trim())) {
       soKnitMap.set(k.salesOrder.trim(), k);
     }
   }
 
-  console.log('[MatcherEngine] KnitMap size:', knitMap.size, 'SO fallback size:', soKnitMap.size);
+  console.log('[MatcherEngine] KnitMap size:', knitMap.size, 'SO fallback:', soKnitMap.size);
 
-  // 2. Build fast Lookup Map for Trims Readiness with Normalized Keys & Module Hierarchies
+  // ──── 2. TRIMS LOOKUP ────
   const trimsMap = new Map<string, TrimsPlanRow>();
-  const moduleTrimsStatusMap = new Map<string, string>(); // module -> 'OK' | 'NO'
-  const moduleDateTrimsMap = new Map<string, string>(); // module_date -> 'OK' | 'NO'
+  const moduleTrimsStatusMap = new Map<string, string>();
+  const moduleDateTrimsMap = new Map<string, string>();
+  const soTrimsMap = new Map<string, TrimsPlanRow>(); // SO-only fallback for trims
 
   for (const t of safeTrims) {
     const norm = normalizeSoLi(t.soli);
     if (norm) {
       trimsMap.set(norm, t);
+      // Also add SO-only fallback for trims
+      const soOnly = norm.split('/')[0];
+      if (soOnly && !soTrimsMap.has(soOnly)) soTrimsMap.set(soOnly, t);
     }
     if (t.soli) {
       const cleanKey = t.soli.trim();
@@ -158,75 +116,73 @@ export function evaluateReadiness(
     const cleanMod = normalizeModuleName(t.module);
 
     if (cleanMod) {
-      if (tStatus === 'OK' || !moduleTrimsStatusMap.has(cleanMod)) {
+      // OK status takes priority — if ANY entry for this module is OK, set it OK
+      const existing = moduleTrimsStatusMap.get(cleanMod);
+      if (tStatus === 'OK' || !existing) {
         moduleTrimsStatusMap.set(cleanMod, tStatus);
       }
-      if (t.psd) {
-        moduleDateTrimsMap.set(`${cleanMod}_${t.psd}`, tStatus);
-      }
-      if (t.ped) {
-        moduleDateTrimsMap.set(`${cleanMod}_${t.ped}`, tStatus);
-      }
+      if (t.psd) moduleDateTrimsMap.set(`${cleanMod}_${t.psd}`, tStatus);
+      if (t.ped) moduleDateTrimsMap.set(`${cleanMod}_${t.ped}`, tStatus);
     }
   }
 
+  // DIAGNOSTIC: Log trims module status map
+  const trimsModuleEntries = Array.from(moduleTrimsStatusMap.entries());
+  console.log('[MatcherEngine] TrimsMap size:', trimsMap.size, 'Module status entries:', trimsModuleEntries.length);
+  if (trimsModuleEntries.length > 0) {
+    console.log('[MatcherEngine] Trims module statuses:', trimsModuleEntries.slice(0, 10).map(([m, s]) => `${m}=${s}`).join(', '));
+  } else {
+    console.warn('[MatcherEngine] ⚠️ NO MODULE-LEVEL TRIMS STATUS - checking if trims have module data...');
+    const trimsWithModule = safeTrims.filter(t => t.module);
+    console.log('[MatcherEngine] Trims rows with module field:', trimsWithModule.length, 'out of', safeTrims.length);
+    if (safeTrims.length > 0) {
+      console.log('[MatcherEngine] First 3 trims rows:', safeTrims.slice(0, 3).map(t => ({ soli: t.soli, module: t.module, status: t.status })));
+    }
+  }
+
+  // ──── 3. MATCHING LOOP ────
   const items: MatchedReadinessItem[] = [];
-  let readyCount = 0;
-  let atRiskCount = 0;
-  let notReadyCount = 0;
-  let upcomingCount = 0;
-  let noDataCount = 0;
+  let readyCount = 0, atRiskCount = 0, notReadyCount = 0, upcomingCount = 0, noDataCount = 0;
   let totalQtyNeeded = 0;
 
-  // Module summaries aggregator
-  const moduleAgg: Record<
-    string,
-    {
-      module: string;
-      totalItems: number;
-      readyCount: number;
-      atRiskCount: number;
-      notReadyCount: number;
-      upcomingCount: number;
-      noDataCount: number;
-      totalQty: number;
-      knitCompletedQty: number;
-      knitTotalNeededQty: number;
-      trimsOkCount: number;
-      trimsTotalCount: number;
-      items: MatchedReadinessItem[];
-    }
-  > = {};
+  const moduleAgg: Record<string, {
+    module: string; totalItems: number; readyCount: number; atRiskCount: number;
+    notReadyCount: number; upcomingCount: number; noDataCount: number; totalQty: number;
+    knitCompletedQty: number; knitTotalNeededQty: number; trimsOkCount: number;
+    trimsTotalCount: number; items: MatchedReadinessItem[];
+  }> = {};
 
-  // DIAGNOSTIC: Track per-module match counts
-  const _debugModuleKnitMatches: Record<string, { matched: number; total: number; missedSoLis: string[] }> = {};
+  // DIAGNOSTIC
+  const _debugModKnit: Record<string, { matched: number; total: number; missed: string[] }> = {};
+  const _debugModTrims: Record<string, { ok: number; total: number; missed: string[] }> = {};
 
   for (const sew of safeSewing) {
     const normKey = normalizeSoLi(sew.so_li);
     const soOnly = normKey ? normKey.split('/')[0] : (sew.so_li ? sew.so_li.split('/')[0] : '');
 
-    let knit = knitMap.get(normKey) 
-            || knitMap.get(sew.so_li?.trim()) 
-            || knitMap.get(sew.so_li?.replace(/\s+/g, ''))
+    // ── Knitting Lookup (multi-strategy) ──
+    let knit = knitMap.get(normKey)
+            || knitMap.get(sew.so_li?.trim() || '')
+            || knitMap.get(sew.so_li?.replace(/\s+/g, '') || '')
             || (soOnly ? soKnitMap.get(soOnly) : undefined);
 
-    // DIAGNOSTIC: Track per-module knitting matches
+    // ── Trims Lookup (multi-strategy with SO fallback) ──
+    let trims = trimsMap.get(normKey)
+             || trimsMap.get(sew.so_li?.trim() || '')
+             || trimsMap.get(sew.so_li?.replace(/\s+/g, '') || '')
+             || (soOnly ? soTrimsMap.get(soOnly) : undefined);
+
+    // ── DIAGNOSTIC tracking ──
     const _mod = sew.module || 'UNKNOWN';
-    if (!_debugModuleKnitMatches[_mod]) _debugModuleKnitMatches[_mod] = { matched: 0, total: 0, missedSoLis: [] };
-    _debugModuleKnitMatches[_mod].total++;
-    if (knit) {
-      _debugModuleKnitMatches[_mod].matched++;
-    } else {
-      if (_debugModuleKnitMatches[_mod].missedSoLis.length < 3) {
-        _debugModuleKnitMatches[_mod].missedSoLis.push(sew.so_li || 'empty');
-      }
-    }
+    if (!_debugModKnit[_mod]) _debugModKnit[_mod] = { matched: 0, total: 0, missed: [] };
+    _debugModKnit[_mod].total++;
+    if (knit) _debugModKnit[_mod].matched++;
+    else if (_debugModKnit[_mod].missed.length < 3) _debugModKnit[_mod].missed.push(sew.so_li || 'empty');
 
-    let trims = trimsMap.get(normKey) 
-             || trimsMap.get(sew.so_li?.trim()) 
-             || trimsMap.get(sew.so_li?.replace(/\s+/g, ''));
+    if (!_debugModTrims[_mod]) _debugModTrims[_mod] = { ok: 0, total: 0, missed: [] };
+    _debugModTrims[_mod].total++;
 
-    // 1. Evaluate Knitting Side (SM WIP, Knit Qty, Order Qty, PKIN Qty, QC Qty)
+    // ── 1. Evaluate Knitting Side ──
     const knitFound = Boolean(knit);
     const knitSmWip = knit
       ? Math.max(
@@ -239,7 +195,7 @@ export function evaluateReadiness(
       : 0;
     const knitReady = knitFound && knitSmWip >= sew.qty;
 
-    // 2. Evaluate Trims Side (Master Module Status + Date + Item Hierarchy)
+    // ── 2. Evaluate Trims Side ──
     const cleanMod = normalizeModuleName(sew.module);
     let trimsFound = Boolean(trims);
     let trimsStatus = trims ? String(trims.status || '').toUpperCase() : '';
@@ -261,10 +217,16 @@ export function evaluateReadiness(
       trimsReady = isTrimsReady(trimsStatus);
     }
 
+    // DIAGNOSTIC tracking
+    if (trimsReady) _debugModTrims[_mod].ok++;
+    else if (_debugModTrims[_mod].missed.length < 3) {
+      _debugModTrims[_mod].missed.push(`${sew.so_li}(modOK=${isModuleMasterOk},found=${trimsFound},status=${trimsStatus})`);
+    }
+
     const diffDays = calculateDaysRemaining(sew.plannedDate, anchorDate);
     totalQtyNeeded += Number(sew.qty) || 0;
 
-    // 3. Determine Overall Status
+    // ── 3. Overall Status ──
     let overallStatus: ReadinessStatus = 'UPCOMING';
     let statusReason = '';
 
@@ -320,46 +282,27 @@ export function evaluateReadiness(
       knitFound,
       knitSmWip,
       knitReady,
-      knitDetails: knit
-        ? {
-            orderQty: knit.orderQtyTotal,
-            knitQty: knit.knitQtyTotal,
-            sizeCount: knit.sizeCount,
-          }
-        : undefined,
+      knitDetails: knit ? { orderQty: knit.orderQtyTotal, knitQty: knit.knitQtyTotal, sizeCount: knit.sizeCount } : undefined,
       trimsFound,
       trimsStatus: trimsStatus || (trimsFound ? 'OK' : 'PENDING'),
       trimsPsd: trims?.psd || '',
       trimsPed: trims?.ped || '',
       trimsReady,
       trimsPedDelayed: false,
-      trimsComments: {
-        rm: trims?.rmComments || '',
-        merch: trims?.merchComments || '',
-      },
+      trimsComments: { rm: trims?.rmComments || '', merch: trims?.merchComments || '' },
       overallStatus,
       statusReason,
     };
 
     items.push(itemObj);
 
-    // Module Aggregator
+    // ── Module Aggregator ──
     const m = cleanMod || sew.module || 'M01';
     if (!moduleAgg[m]) {
       moduleAgg[m] = {
-        module: m,
-        totalItems: 0,
-        readyCount: 0,
-        atRiskCount: 0,
-        notReadyCount: 0,
-        upcomingCount: 0,
-        noDataCount: 0,
-        totalQty: 0,
-        knitCompletedQty: 0,
-        knitTotalNeededQty: 0,
-        trimsOkCount: 0,
-        trimsTotalCount: 0,
-        items: [],
+        module: m, totalItems: 0, readyCount: 0, atRiskCount: 0, notReadyCount: 0,
+        upcomingCount: 0, noDataCount: 0, totalQty: 0, knitCompletedQty: 0,
+        knitTotalNeededQty: 0, trimsOkCount: 0, trimsTotalCount: 0, items: [],
       };
     }
 
@@ -380,17 +323,21 @@ export function evaluateReadiness(
     mod.items.push(itemObj);
   }
 
-  // DIAGNOSTIC: Log per-module knitting match results
-  console.log('[MatcherEngine] Per-module knitting match results:');
-  for (const [mod, info] of Object.entries(_debugModuleKnitMatches)) {
+  // ──── DIAGNOSTIC OUTPUT ────
+  console.log('[MatcherEngine] === PER-MODULE KNITTING MATCH ===');
+  for (const [m, info] of Object.entries(_debugModKnit)) {
     if (info.matched < info.total) {
-      console.warn(`  ${mod}: ${info.matched}/${info.total} matched. Missed SO_LIs:`, info.missedSoLis);
-    } else {
-      console.log(`  ${mod}: ${info.matched}/${info.total} ✓`);
+      console.warn(`  ${m}: ${info.matched}/${info.total} knit matched. Missed:`, info.missed);
+    }
+  }
+  console.log('[MatcherEngine] === PER-MODULE TRIMS MATCH ===');
+  for (const [m, info] of Object.entries(_debugModTrims)) {
+    if (info.ok < info.total) {
+      console.warn(`  ${m}: ${info.ok}/${info.total} trims OK. Detail:`, info.missed);
     }
   }
 
-  // Sort items by Planned Date ascending, then Module
+  // Sort
   items.sort((a, b) => {
     if (a.plannedDate && b.plannedDate) {
       const cmp = a.plannedDate.localeCompare(b.plannedDate);
@@ -414,7 +361,6 @@ export function evaluateReadiness(
     urgentCount: atRiskCount + notReadyCount,
   };
 
-  // Sort modules naturally: M01, M02, ... M26
   const moduleSummaries: ModuleSummary[] = Object.values(moduleAgg).sort((a, b) => {
     const numA = parseInt(a.module.replace(/\D/g, ''), 10) || 0;
     const numB = parseInt(b.module.replace(/\D/g, ''), 10) || 0;

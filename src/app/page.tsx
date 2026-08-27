@@ -91,7 +91,7 @@ export default function DashboardPage() {
           </div>
 
           {dataset.metadata.lastUpdated && (
-            <div className="text-[11px] text-slate-400 font-mono bg-navy-900 px-3 py-1.5 rounded-xl border border-navy-700/80 shadow-md self-start sm:self-auto">
+            <div suppressHydrationWarning className="text-[11px] text-slate-400 font-mono bg-navy-900 px-3 py-1.5 rounded-xl border border-navy-700/80 shadow-md self-start sm:self-auto">
               Last Sync: {new Date(dataset.metadata.lastUpdated).toLocaleDateString()} {new Date(dataset.metadata.lastUpdated).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </div>
           )}
