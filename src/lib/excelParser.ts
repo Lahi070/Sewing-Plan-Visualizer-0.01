@@ -3,9 +3,6 @@ import { SewingPlanRow, KnittingPlanRow, TrimsPlanRow } from './types';
 
 /**
  * Normalizes any Sales Order and Line Item variation into standard "cleanSo/cleanLi"
- * e.g. "0080005129", "000120" -> "80005129/120"
- * e.g. "80005129 / 120" -> "80005129/120"
- * e.g. "80005129-120::" -> "80005129/120"
  */
 export function normalizeSoLi(rawSoLi?: any, rawSo?: any, rawLi?: any): string {
   let combined = String(rawSoLi || '').trim();
@@ -24,10 +21,8 @@ export function normalizeSoLi(rawSoLi?: any, rawSo?: any, rawLi?: any): string {
     return '';
   }
 
-  // Clean trailing colons, spaces, semicolons e.g. "80005129/120::"
   combined = combined.replace(/[:;\s]+$/, '').trim();
 
-  // Split by common delimiters: '/', '-', '_', ':', '.' or whitespace
   const match = combined.match(/^([a-zA-Z0-9]+)[\/\-_:\s\.]+([a-zA-Z0-9]+)/);
   if (match) {
     let so = match[1].trim();
@@ -198,6 +193,7 @@ export function parseSewingPlanWorkbook(workbook: XLSX.WorkBook): {
 
 /**
  * 2. Parse Knitting WIP file
+ * Checks SM WIP, Knit Qty, PKIN Qty, QC Qty across size variants
  */
 export function parseKnittingWipWorkbook(workbook: XLSX.WorkBook): {
   rows: KnittingPlanRow[];
@@ -221,12 +217,12 @@ export function parseKnittingWipWorkbook(workbook: XLSX.WorkBook): {
     const cleanSo = parts[0] || so_li;
     const cleanLi = parts[1] || '';
 
-    const smWip = Number(r['SM WIP'] ?? r['SM_WIP'] ?? r['SMWIP'] ?? r['WIP Qty'] ?? 0) || 0;
+    const smWip = Number(r['SM WIP'] ?? r['SM_WIP'] ?? r['SMWIP'] ?? r['WIP Qty'] ?? r['WIP'] ?? 0) || 0;
     const orderQty = Number(r['Order Qty'] ?? r['Order Qty + Scrap'] ?? r['Total Qty'] ?? 0) || 0;
-    const knitQty = Number(r['Knit Qty'] ?? r['Knitted Qty'] ?? 0) || 0;
-    const pkinQty = Number(r['PKIN Qty'] ?? 0) || 0;
-    const qcQty = Number(r['QC Qty'] ?? 0) || 0;
-    const shippedQty = Number(r['Shipped Qty'] ?? 0) || 0;
+    const knitQty = Number(r['Knit Qty'] ?? r['Knitted Qty'] ?? r['Knit'] ?? r['Actual Knit'] ?? 0) || 0;
+    const pkinQty = Number(r['PKIN Qty'] ?? r['PKIN'] ?? 0) || 0;
+    const qcQty = Number(r['QC Qty'] ?? r['QC'] ?? 0) || 0;
+    const shippedQty = Number(r['Shipped Qty'] ?? r['Shipped'] ?? 0) || 0;
 
     if (!map.has(so_li)) {
       map.set(so_li, {
@@ -432,7 +428,6 @@ export function discoverTrimsDatedSheets(workbook: XLSX.WorkBook): {
 
 /**
  * 3. Parse Trims Readiness file
- * Multi-layer parser: Scans "Trim readiness status" matrix sheet AND item detail sheets.
  */
 export function parseTrimsReadinessWorkbook(
   workbook: XLSX.WorkBook,
@@ -451,7 +446,7 @@ export function parseTrimsReadinessWorkbook(
   const seenSoli = new Set<string>();
   let totalRawCount = 0;
 
-  // 1. First, check if there is a "Trim readiness status" matrix sheet
+  // 1. Parse matrix sheet if present
   for (const s of workbook.SheetNames) {
     const lower = s.toLowerCase();
     if (lower.includes('readiness status') || lower.includes('trim readiness') || lower === 'status') {
@@ -468,7 +463,7 @@ export function parseTrimsReadinessWorkbook(
     }
   }
 
-  // 2. Scan all item detail sheets (e.g. Plan summery, MRP,VAS, Dec, Nike lbl, Plan summary ...)
+  // 2. Scan all item detail sheets
   const sheetsToScan = [targetSheet];
   for (const s of workbook.SheetNames) {
     if (!sheetsToScan.includes(s) && !s.toLowerCase().includes('pivot')) {
@@ -528,7 +523,6 @@ export function parseTrimsReadinessWorkbook(
         getColVal(row, ['Status', 'Trims Status', 'Status (OK/NO)', 'Readiness', 'Allocation', 'Trim Status', 'Allocation Status'])
       ).trim().toUpperCase();
 
-      // Normalize status: GREEN/OK vs RED/NO
       if (rawStatus === '0' || rawStatus === 'GREEN' || rawStatus === 'ALLOCATED' || rawStatus === 'READY' || rawStatus === '1' || rawStatus === 'YES') {
         rawStatus = 'OK';
       } else if (rawStatus === 'RED' || rawStatus === 'FAIL' || rawStatus === 'SHORTAGE' || rawStatus === 'NOT READY') {

@@ -123,7 +123,6 @@ export function evaluateReadiness(
     const mod = String(t.module || '').trim().toUpperCase();
 
     if (mod) {
-      // If any record for this module is Green/OK, the module trims status is OK
       if (tStatus === 'OK' || !moduleTrimsStatusMap.has(mod)) {
         moduleTrimsStatusMap.set(mod, tStatus);
       }
@@ -170,9 +169,16 @@ export function evaluateReadiness(
     let knit = knitMap.get(normKey) || knitMap.get(sew.so_li?.trim());
     let trims = trimsMap.get(normKey) || trimsMap.get(sew.so_li?.trim());
 
-    // 1. Evaluate Knitting Side
+    // 1. Evaluate Knitting Side (Check SM WIP, Knit Qty, PKIN Qty, QC Qty)
     const knitFound = Boolean(knit);
-    const knitSmWip = knit ? (Number(knit.smWipTotal) || 0) : 0;
+    const knitSmWip = knit
+      ? Math.max(
+          Number(knit.smWipTotal) || 0,
+          Number(knit.knitQtyTotal) || 0,
+          Number(knit.pkinQtyTotal) || 0,
+          Number(knit.qcQtyTotal) || 0
+        )
+      : 0;
     const knitReady = knitFound && knitSmWip >= sew.qty;
 
     // 2. Evaluate Trims Side
