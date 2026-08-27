@@ -181,7 +181,7 @@ export function parseSewingPlanWorkbook(workbook: XLSX.WorkBook): {
 
   for (const r of rawRows) {
     // 1. Always update lastModuleName first in case this is a grouping header row without qty
-    const moduleRaw = r['Module'] ?? r['Module#'] ?? r['module'] ?? r['Line'] ?? r['Line#'] ?? r['Module No'];
+    const moduleRaw = r['Module'] ?? r['Module#'] ?? r['module'] ?? r['Line'] ?? r['Line#'] ?? r['Module No'] ?? r['Sewing Line'] ?? r['Line Name'];
     if (moduleRaw !== undefined && moduleRaw !== null && String(moduleRaw).trim() !== '') {
       lastModuleName = normalizeModuleName(String(moduleRaw)) || 'M01';
     }
