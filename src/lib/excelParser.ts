@@ -8,10 +8,8 @@ import { SewingPlanRow, KnittingPlanRow, TrimsPlanRow } from './types';
  * e.g. "80005129-120::" -> "80005129/120"
  */
 export function normalizeSoLi(rawSoLi?: any, rawSo?: any, rawLi?: any): string {
-  // 1. If combined string provided
   let combined = String(rawSoLi || '').trim();
 
-  // If no combined string, try combining rawSo and rawLi
   if (!combined && (rawSo !== undefined || rawLi !== undefined)) {
     const s = String(rawSo ?? '').trim();
     const l = String(rawLi ?? '').trim();
@@ -35,7 +33,6 @@ export function normalizeSoLi(rawSoLi?: any, rawSo?: any, rawLi?: any): string {
     let so = match[1].trim();
     let li = match[2].trim();
 
-    // Strip leading zeros if purely numeric
     const parsedSo = parseInt(so, 10);
     if (!isNaN(parsedSo) && /^\d+$/.test(so)) {
       so = String(parsedSo);
@@ -49,7 +46,6 @@ export function normalizeSoLi(rawSoLi?: any, rawSo?: any, rawLi?: any): string {
     return `${so}/${li}`;
   }
 
-  // Fallback: strip leading zeros from single string
   const singleParsed = parseInt(combined, 10);
   if (!isNaN(singleParsed) && /^\d+$/.test(combined)) {
     return String(singleParsed);
@@ -62,7 +58,6 @@ export function normalizeSoLi(rawSoLi?: any, rawSo?: any, rawLi?: any): string {
  * Extracts key from any row object by checking all known column aliases
  */
 export function extractRowSoLi(row: Record<string, any>): string {
-  // Direct combined aliases
   const combinedKeys = [
     'SO_LI', 'so_li', 'SO/LI', 'so/li', 'SOLI', 'soli', 'SO-LI', 'so-li',
     'SO_Li', 'So_Li', 'SO LI', 'so li', 'Sales Order / Line Item',
@@ -75,7 +70,6 @@ export function extractRowSoLi(row: Record<string, any>): string {
     }
   }
 
-  // Separate SO & LI aliases
   const soKeys = [
     'Sales Order', 'Sales order', 'sales order', 'Sales Order No', 'Sales Order #',
     'SO', 'so', 'SO No', 'SO#', 'Order', 'Order No', 'Order#'
@@ -110,7 +104,7 @@ export function extractRowSoLi(row: Record<string, any>): string {
 }
 
 /**
- * Converts an Excel serial date number (e.g. 45870) or date string/Date to ISO "YYYY-MM-DD"
+ * Converts an Excel serial date number or date string/Date to ISO "YYYY-MM-DD"
  */
 export function parseExcelDate(val: any): string {
   if (!val || val === '-' || val === ' ' || val === 'N/A') return '';
@@ -120,7 +114,6 @@ export function parseExcelDate(val: any): string {
   }
   const num = Number(val);
   if (!isNaN(num) && num > 30000 && num < 65000) {
-    // Excel epoch 1899-12-30
     const utc_days = Math.floor(num - 25569);
     const utc_value = utc_days * 86400;
     const date = new Date(utc_value * 1000);
@@ -136,15 +129,12 @@ export function parseExcelDate(val: any): string {
 
 /**
  * 1. Parse Pre Work Sewing Plan file
- * Rule: Auto-detects sheet with Module and SO_LI / Qty columns, falls back to Sheet1 or first sheet.
- * Handles both combined SO_LI and separate Sales Order + Line Item columns.
  */
 export function parseSewingPlanWorkbook(workbook: XLSX.WorkBook): {
   rows: SewingPlanRow[];
   sheetUsed: string;
   totalSkipped: number;
 } {
-  // Find candidate sheet: preference for 'sheet1', or sheet with 'sewing' / 'plan', or first sheet
   let sheetName = workbook.SheetNames.find((name) => name.toLowerCase() === 'sheet1');
   if (!sheetName) {
     sheetName = workbook.SheetNames.find((name) => {
@@ -158,13 +148,11 @@ export function parseSewingPlanWorkbook(workbook: XLSX.WorkBook): {
     throw new Error(`Could not find sheet [${sheetName}] in sewing plan file.`);
   }
 
-  // Parse raw table
   const rawRows: any[] = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
   const rows: SewingPlanRow[] = [];
   let totalSkipped = 0;
 
   for (const r of rawRows) {
-    // Extract quantity
     const rawQty = r['Qty'] ?? r['qty'] ?? r['QTY'] ?? r['Planned Qty'] ?? r['Sew Qty'] ?? r['Quantity'];
     if (rawQty === '-' || rawQty === '' || rawQty === undefined || rawQty === null) {
       totalSkipped++;
@@ -177,14 +165,12 @@ export function parseSewingPlanWorkbook(workbook: XLSX.WorkBook): {
       continue;
     }
 
-    // Extract Module
     const moduleRaw = r['Module'] ?? r['Module#'] ?? r['module'] ?? r['Line'] ?? r['Line#'] ?? r['Module No'] ?? 'M01';
     let moduleNo = String(moduleRaw).trim().toUpperCase();
     if (!moduleNo.startsWith('M') && /^\d+$/.test(moduleNo)) {
       moduleNo = `M${moduleNo.padStart(2, '0')}`;
     }
 
-    // Extract SO_LI (Universal extractor)
     const so_li = extractRowSoLi(r);
     const plannedDate = parseExcelDate(r['Date'] ?? r['date'] ?? r['Planned Date'] ?? r['Sewing Date'] ?? r['PSD']);
 
@@ -212,8 +198,6 @@ export function parseSewingPlanWorkbook(workbook: XLSX.WorkBook): {
 
 /**
  * 2. Parse Knitting WIP file
- * Rule: Join key SO_LI = clean Sales Order + "/" + clean Line Item
- * Sum SM WIP across all SAP Size rows for that SO_LI.
  */
 export function parseKnittingWipWorkbook(workbook: XLSX.WorkBook): {
   rows: KnittingPlanRow[];
@@ -290,7 +274,7 @@ export function discoverTrimsDatedSheets(workbook: XLSX.WorkBook): {
 
   const results = workbook.SheetNames.map((name) => {
     const lower = name.toLowerCase().trim();
-    if (lower.includes('trim readiness status') || lower.includes('pivot')) {
+    if (lower.includes('pivot')) {
       return { sheetName: name, parsedDate: null, score: 999999, isRecommended: false };
     }
 
@@ -338,7 +322,7 @@ export function discoverTrimsDatedSheets(workbook: XLSX.WorkBook): {
     return candidates;
   }
 
-  const fallback = results.filter((r) => !r.sheetName.toLowerCase().includes('trim readiness'));
+  const fallback = results.filter((r) => !r.sheetName.toLowerCase().includes('pivot'));
   if (fallback.length > 0) {
     fallback[0].isRecommended = true;
   }
@@ -347,7 +331,8 @@ export function discoverTrimsDatedSheets(workbook: XLSX.WorkBook): {
 
 /**
  * 3. Parse Trims Readiness file
- * Rule: Dynamically detect header row, extract SOLI, check Status (OK/NO) and PSD/PED.
+ * Rule: Reads Trims allocation status (GREEN/OK vs RED/NO).
+ * Scans primary sheet and merges all plan summary sheets so no module is missed.
  */
 export function parseTrimsReadinessWorkbook(
   workbook: XLSX.WorkBook,
@@ -362,87 +347,105 @@ export function parseTrimsReadinessWorkbook(
   const recommended = availableSheets.find((s) => s.isRecommended)?.sheetName;
   const targetSheet = selectedSheetName || recommended || workbook.SheetNames[0];
 
-  const worksheet = workbook.Sheets[targetSheet];
-  if (!worksheet) {
-    throw new Error(`Could not find sheet [${targetSheet}] in Trims file.`);
-  }
-
-  const rawTable: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
-
-  // Locate the header row (scan first 10 rows)
-  let headerRowIdx = 0;
-  for (let i = 0; i < Math.min(10, rawTable.length); i++) {
-    const row = rawTable[i];
-    if (
-      Array.isArray(row) &&
-      row.some((cell) => String(cell).trim().toLowerCase().includes('module') || String(cell).trim().toLowerCase().includes('status'))
-    ) {
-      headerRowIdx = i;
-      break;
-    }
-  }
-
-  const headerRow = (rawTable[headerRowIdx] || []).map((h) => String(h || '').trim());
-  const headerMap: Record<string, number> = {};
-  headerRow.forEach((h, idx) => {
-    if (h) headerMap[h.toLowerCase()] = idx;
-  });
-
-  const getColVal = (row: any[], aliases: string[]) => {
-    for (const a of aliases) {
-      const idx = headerMap[a.toLowerCase()];
-      if (idx !== undefined && row[idx] !== undefined) return row[idx];
-    }
-    return '';
-  };
-
   const rows: TrimsPlanRow[] = [];
   const seenSoli = new Set<string>();
+  let totalRawCount = 0;
 
-  for (let i = headerRowIdx + 1; i < rawTable.length; i++) {
-    const row = rawTable[i];
-    if (!row || row.length === 0) continue;
+  // Determine sheets to scan (primary target sheet first, then all remaining plan sheets)
+  const sheetsToScan = [targetSheet];
+  for (const s of workbook.SheetNames) {
+    if (!sheetsToScan.includes(s) && !s.toLowerCase().includes('pivot')) {
+      sheetsToScan.push(s);
+    }
+  }
 
-    // Create object representation for universal extractor
-    const rowObj: Record<string, any> = {};
+  for (const sheetName of sheetsToScan) {
+    const worksheet = workbook.Sheets[sheetName];
+    if (!worksheet) continue;
+
+    const rawTable: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
+    totalRawCount += rawTable.length;
+
+    let headerRowIdx = 0;
+    for (let i = 0; i < Math.min(10, rawTable.length); i++) {
+      const r = rawTable[i];
+      if (
+        Array.isArray(r) &&
+        r.some((cell) => {
+          const str = String(cell).trim().toLowerCase();
+          return str.includes('module') || str.includes('status') || str.includes('so') || str.includes('soli');
+        })
+      ) {
+        headerRowIdx = i;
+        break;
+      }
+    }
+
+    const headerRow = (rawTable[headerRowIdx] || []).map((h) => String(h || '').trim());
+    const headerMap: Record<string, number> = {};
     headerRow.forEach((h, idx) => {
-      if (h) rowObj[h] = row[idx];
+      if (h) headerMap[h.toLowerCase()] = idx;
     });
 
-    const soli = extractRowSoLi(rowObj);
-    if (!soli) continue;
+    const getColVal = (row: any[], aliases: string[]) => {
+      for (const a of aliases) {
+        const idx = headerMap[a.toLowerCase()];
+        if (idx !== undefined && row[idx] !== undefined) return row[idx];
+      }
+      return '';
+    };
 
-    let rawStatus = String(getColVal(row, ['Status', 'Trims Status', 'Status (OK/NO)', 'Readiness'])).trim().toUpperCase();
-    if (rawStatus === '0' || rawStatus === '') rawStatus = 'OK';
-    if (rawStatus === 'RED' || rawStatus === 'FAIL') rawStatus = 'NO';
+    for (let i = headerRowIdx + 1; i < rawTable.length; i++) {
+      const row = rawTable[i];
+      if (!row || row.length === 0) continue;
 
-    const psd = parseExcelDate(getColVal(row, ['PSD', 'Plan Sewing Date', 'Planned Date', 'Start Date']));
-    const ped = parseExcelDate(getColVal(row, ['PED', 'Plan End Date', 'Trims Date', 'Delivery Date']));
-    const daysLate = Number(getColVal(row, ['Days Late', 'Late Days', 'Delay'])) || 0;
-
-    const moduleRaw = String(getColVal(row, ['Module', 'Module#', 'Line'])).trim().toUpperCase();
-    const customer = String(getColVal(row, ['Customer', 'Buyer'])).trim();
-    const product = String(getColVal(row, ['Product', 'Style', 'Item'])).trim();
-    const cw = String(getColVal(row, ['CW', 'Color'])).trim();
-    const totalQty = Number(getColVal(row, ['Total QTY', 'Total Qty', 'Qty'])) || 0;
-
-    if (!seenSoli.has(soli)) {
-      seenSoli.add(soli);
-      rows.push({
-        soli,
-        module: moduleRaw,
-        customer,
-        product,
-        cw,
-        status: rawStatus || 'OK',
-        psd,
-        ped,
-        daysLate,
-        rmComments: String(getColVal(row, ['RM Comments', 'RM Comment'])).trim(),
-        merchComments: String(getColVal(row, ['Merch comments', 'Merch Comments'])).trim(),
-        totalQty,
-        sheetName: targetSheet,
+      const rowObj: Record<string, any> = {};
+      headerRow.forEach((h, idx) => {
+        if (h) rowObj[h] = row[idx];
       });
+
+      const soli = extractRowSoLi(rowObj);
+      if (!soli) continue;
+
+      let rawStatus = String(
+        getColVal(row, ['Status', 'Trims Status', 'Status (OK/NO)', 'Readiness', 'Allocation', 'Trim Status', 'Allocation Status'])
+      ).trim().toUpperCase();
+
+      // Normalize status: GREEN/OK vs RED/NO
+      if (rawStatus === '0' || rawStatus === 'GREEN' || rawStatus === 'ALLOCATED' || rawStatus === 'READY' || rawStatus === '1' || rawStatus === 'YES') {
+        rawStatus = 'OK';
+      } else if (rawStatus === 'RED' || rawStatus === 'FAIL' || rawStatus === 'SHORTAGE' || rawStatus === 'NOT READY') {
+        rawStatus = 'NO';
+      }
+
+      const psd = parseExcelDate(getColVal(row, ['PSD', 'Plan Sewing Date', 'Planned Date', 'Start Date']));
+      const ped = parseExcelDate(getColVal(row, ['PED', 'Plan End Date', 'Trims Date', 'Delivery Date']));
+      const daysLate = Number(getColVal(row, ['Days Late', 'Late Days', 'Delay'])) || 0;
+
+      const moduleRaw = String(getColVal(row, ['Module', 'Module#', 'Line'])).trim().toUpperCase();
+      const customer = String(getColVal(row, ['Customer', 'Buyer'])).trim();
+      const product = String(getColVal(row, ['Product', 'Style', 'Item'])).trim();
+      const cw = String(getColVal(row, ['CW', 'Color'])).trim();
+      const totalQty = Number(getColVal(row, ['Total QTY', 'Total Qty', 'Qty'])) || 0;
+
+      if (!seenSoli.has(soli)) {
+        seenSoli.add(soli);
+        rows.push({
+          soli,
+          module: moduleRaw,
+          customer,
+          product,
+          cw,
+          status: rawStatus || 'OK',
+          psd,
+          ped,
+          daysLate,
+          rmComments: String(getColVal(row, ['RM Comments', 'RM Comment'])).trim(),
+          merchComments: String(getColVal(row, ['Merch comments', 'Merch Comments'])).trim(),
+          totalQty,
+          sheetName,
+        });
+      }
     }
   }
 
@@ -450,6 +453,6 @@ export function parseTrimsReadinessWorkbook(
     rows,
     sheetUsed: targetSheet,
     availableSheets,
-    totalRawRows: rawTable.length,
+    totalRawRows: totalRawCount,
   };
 }

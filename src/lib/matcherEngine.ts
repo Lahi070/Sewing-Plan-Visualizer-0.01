@@ -29,6 +29,24 @@ export function calculateDaysRemaining(targetDateStr: string, anchorDate: Date =
 }
 
 /**
+ * Checks if trims status is Green / OK / Allocated
+ */
+export function isTrimsReady(status: string | undefined): boolean {
+  if (!status) return false;
+  const s = String(status).trim().toUpperCase();
+  return (
+    s === 'OK' ||
+    s === 'GREEN' ||
+    s === 'ALLOCATED' ||
+    s === 'READY' ||
+    s === 'YES' ||
+    s === '0' ||
+    s === '1' ||
+    s === 'PASS'
+  );
+}
+
+/**
  * Helper to build clear reason messages for floor operators
  */
 function buildIssueReason(
@@ -38,8 +56,7 @@ function buildIssueReason(
   qtyNeeded: number,
   trimsFound: boolean,
   trimsReady: boolean,
-  trimsStatus: string,
-  trimsPedDelayed: boolean
+  trimsStatus: string
 ): string {
   const issues: string[] = [];
 
@@ -52,11 +69,7 @@ function buildIssueReason(
   if (!trimsFound) {
     issues.push('Trims verification pending');
   } else if (!trimsReady) {
-    if (trimsPedDelayed) {
-      issues.push('Trims delivery date after sewing date');
-    } else {
-      issues.push(`Trims status: ${trimsStatus || 'NO'}`);
-    }
+    issues.push(`Trims allocation: ${trimsStatus || 'RED'}`);
   }
 
   if (issues.length === 0) return 'Prerequisites verified';
@@ -145,18 +158,10 @@ export function evaluateReadiness(
     const knitSmWip = knit ? (Number(knit.smWipTotal) || 0) : 0;
     const knitReady = knitFound && knitSmWip >= sew.qty;
 
-    // 2. Evaluate Trims Side
+    // 2. Evaluate Trims Side (Only check Status: Green/OK vs Red/NO, no quantity logic)
     const trimsFound = Boolean(trims);
     const trimsStatus = trims ? String(trims.status || 'NO').toUpperCase() : '';
-    let trimsPedDelayed = false;
-    if (trims && trims.ped && sew.plannedDate) {
-      const sewTime = new Date(sew.plannedDate).getTime();
-      const pedTime = new Date(trims.ped).getTime();
-      if (!isNaN(sewTime) && !isNaN(pedTime) && pedTime > sewTime) {
-        trimsPedDelayed = true;
-      }
-    }
-    const trimsReady = trimsFound && (trimsStatus === 'OK' || trimsStatus === '0') && !trimsPedDelayed;
+    const trimsReady = trimsFound && isTrimsReady(trimsStatus);
 
     // 3. Determine Overall Status
     let overallStatus: ReadinessStatus = 'UPCOMING';
@@ -169,15 +174,15 @@ export function evaluateReadiness(
     } else if (knitFound || trimsFound) {
       if (diffDays <= 0) {
         overallStatus = 'NOT_READY';
-        statusReason = buildIssueReason(knitFound, knitReady, knitSmWip, sew.qty, trimsFound, trimsReady, trimsStatus, trimsPedDelayed);
+        statusReason = buildIssueReason(knitFound, knitReady, knitSmWip, sew.qty, trimsFound, trimsReady, trimsStatus);
         notReadyCount++;
       } else if (diffDays <= 3) {
         overallStatus = 'AT_RISK';
-        statusReason = buildIssueReason(knitFound, knitReady, knitSmWip, sew.qty, trimsFound, trimsReady, trimsStatus, trimsPedDelayed);
+        statusReason = buildIssueReason(knitFound, knitReady, knitSmWip, sew.qty, trimsFound, trimsReady, trimsStatus);
         atRiskCount++;
       } else {
         overallStatus = 'UPCOMING';
-        statusReason = buildIssueReason(knitFound, knitReady, knitSmWip, sew.qty, trimsFound, trimsReady, trimsStatus, trimsPedDelayed);
+        statusReason = buildIssueReason(knitFound, knitReady, knitSmWip, sew.qty, trimsFound, trimsReady, trimsStatus);
         upcomingCount++;
       }
     } else {
@@ -226,7 +231,7 @@ export function evaluateReadiness(
       trimsPsd: trims?.psd || '',
       trimsPed: trims?.ped || '',
       trimsReady,
-      trimsPedDelayed,
+      trimsPedDelayed: false,
       trimsComments: {
         rm: trims?.rmComments || '',
         merch: trims?.merchComments || '',
