@@ -18,8 +18,8 @@ interface ModuleRiskChartProps {
 }
 
 export function ModuleRiskChart({ moduleSummaries, onSelectModule }: ModuleRiskChartProps) {
-  // Sort modules with active requirements
-  const chartData = moduleSummaries.slice(0, 15).map((m) => ({
+  // Include all modules
+  const chartData = moduleSummaries.map((m) => ({
     name: m.module,
     Ready: m.readyCount,
     'At Risk': m.atRiskCount,
@@ -28,6 +28,9 @@ export function ModuleRiskChart({ moduleSummaries, onSelectModule }: ModuleRiskC
     'No Data': m.noDataCount,
     total: m.totalItems,
   }));
+
+  // Calculate dynamic width to prevent squishing bars (e.g., 40px per module, min 100%)
+  const minChartWidth = Math.max(600, chartData.length * 40);
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
@@ -69,34 +72,36 @@ export function ModuleRiskChart({ moduleSummaries, onSelectModule }: ModuleRiskC
         <span className="text-xs text-cyan-400/80 font-medium">Click module to drill down</span>
       </div>
 
-      <div className="h-64 mt-2">
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart
-            data={chartData}
-            margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
-            onClick={(e: any) => {
-              if (e && e.activeLabel) {
-                onSelectModule(e.activeLabel);
-              }
-            }}
-            className="cursor-pointer"
-          >
-            <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={{ stroke: '#1C2C5E' }} tickLine={false} />
-            <YAxis tick={{ fontSize: 11, fill: '#64748b' }} axisLine={{ stroke: '#1C2C5E' }} tickLine={false} />
-            <Tooltip content={<CustomTooltip />} />
-            <Legend
-              verticalAlign="bottom"
-              height={36}
-              iconType="circle"
-              iconSize={8}
-              formatter={(value) => <span className="text-xs text-slate-300 font-medium mr-2">{value}</span>}
-            />
-            <Bar dataKey="Not Ready" stackId="a" fill="#f43f5e" radius={[0, 0, 0, 0]} />
-            <Bar dataKey="At Risk" stackId="a" fill="#f59e0b" radius={[0, 0, 0, 0]} />
-            <Bar dataKey="Upcoming" stackId="a" fill="#38bdf8" radius={[0, 0, 0, 0]} />
-            <Bar dataKey="Ready" stackId="a" fill="#10b981" radius={[3, 3, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
+      <div className="h-64 mt-2 overflow-x-auto w-full custom-scrollbar">
+        <div style={{ minWidth: `${minChartWidth}px`, height: '100%' }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart
+              data={chartData}
+              margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
+              onClick={(e: any) => {
+                if (e && e.activeLabel) {
+                  onSelectModule(e.activeLabel);
+                }
+              }}
+              className="cursor-pointer"
+            >
+              <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={{ stroke: '#1C2C5E' }} tickLine={false} />
+              <YAxis tick={{ fontSize: 11, fill: '#64748b' }} axisLine={{ stroke: '#1C2C5E' }} tickLine={false} />
+              <Tooltip content={<CustomTooltip />} />
+              <Legend
+                verticalAlign="bottom"
+                height={36}
+                iconType="circle"
+                iconSize={8}
+                formatter={(value) => <span className="text-xs text-slate-300 font-medium mr-2">{value}</span>}
+              />
+              <Bar dataKey="Not Ready" stackId="a" fill="#f43f5e" radius={[0, 0, 0, 0]} />
+              <Bar dataKey="At Risk" stackId="a" fill="#f59e0b" radius={[0, 0, 0, 0]} />
+              <Bar dataKey="Upcoming" stackId="a" fill="#38bdf8" radius={[0, 0, 0, 0]} />
+              <Bar dataKey="Ready" stackId="a" fill="#10b981" radius={[3, 3, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
       </div>
     </div>
   );
