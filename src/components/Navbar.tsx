@@ -2,8 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Layers, UploadCloud, RefreshCw, Database, Clock, ShieldCheck, Printer, Sparkles } from 'lucide-react';
-import { isSupabaseConfigured } from '@/lib/supabase';
+import { Layers, UploadCloud, RefreshCw, Database, Clock, ShieldCheck, Printer, RotateCcw } from 'lucide-react';
+import { isSupabaseConfigured, clearLocalDataset } from '@/lib/supabase';
 import { formatDate } from '@/lib/utils';
 
 interface NavbarProps {
@@ -37,6 +37,13 @@ export function Navbar({ lastUpdated, onRefresh, isRefreshing }: NavbarProps) {
   const handlePrint = () => {
     if (typeof window !== 'undefined') {
       window.print();
+    }
+  };
+
+  const handleHardRefresh = () => {
+    if (typeof window !== 'undefined') {
+      clearLocalDataset();
+      window.location.reload();
     }
   };
 
@@ -90,19 +97,14 @@ export function Navbar({ lastUpdated, onRefresh, isRefreshing }: NavbarProps) {
               <Printer className="w-4 h-4 text-slate-400 hover:text-white" />
             </button>
 
-            {/* Refresh Button */}
-            {onRefresh && (
-              <button
-                onClick={onRefresh}
-                disabled={isRefreshing}
-                title="Refresh floor readiness calculation"
-                className={`p-2 rounded-lg text-slate-300 hover:text-white bg-navy-900 hover:bg-navy-800 border border-navy-700/70 transition-colors no-print ${
-                  isRefreshing ? 'opacity-50 cursor-not-allowed' : ''
-                }`}
-              >
-                <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin text-cyan-400' : ''}`} />
-              </button>
-            )}
+            {/* Refresh / Re-Sync Button */}
+            <button
+              onClick={handleHardRefresh}
+              title="Reset Cache & Refresh Data"
+              className="p-2 rounded-lg text-slate-300 hover:text-white bg-navy-900 hover:bg-navy-800 border border-navy-700/70 transition-colors no-print group"
+            >
+              <RefreshCw className="w-4 h-4 text-cyan-400 group-hover:rotate-180 transition-transform duration-500" />
+            </button>
 
             {/* Admin Upload Button */}
             <Link
