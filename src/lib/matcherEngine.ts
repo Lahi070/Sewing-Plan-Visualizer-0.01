@@ -98,6 +98,15 @@ export function evaluateReadiness(
   const safeKnitting = Array.isArray(knittingPlan) ? knittingPlan : [];
   const safeTrims = Array.isArray(trimsPlan) ? trimsPlan : [];
 
+  // DIAGNOSTIC: Log data sizes
+  console.log('[MatcherEngine] Input sizes → Sewing:', safeSewing.length, 'Knitting:', safeKnitting.length, 'Trims:', safeTrims.length);
+  if (safeKnitting.length > 0) {
+    console.log('[MatcherEngine] First 3 knitting SO_LIs:', safeKnitting.slice(0, 3).map(k => k.so_li));
+    console.log('[MatcherEngine] First knitting row keys:', Object.keys(safeKnitting[0]));
+  } else {
+    console.warn('[MatcherEngine] ⚠️ KNITTING DATA IS EMPTY - this will cause 0% WIP');
+  }
+
   // 1. Build fast Lookup Map for Knitting WIP with Normalized Keys & SO Fallback
   const knitMap = new Map<string, KnittingPlanRow>();
   const soKnitMap = new Map<string, KnittingPlanRow>();
@@ -125,6 +134,8 @@ export function evaluateReadiness(
       soKnitMap.set(k.salesOrder.trim(), k);
     }
   }
+
+  console.log('[MatcherEngine] KnitMap size:', knitMap.size, 'SO fallback size:', soKnitMap.size);
 
   // 2. Build fast Lookup Map for Trims Readiness with Normalized Keys & Module Hierarchies
   const trimsMap = new Map<string, TrimsPlanRow>();
@@ -187,6 +198,9 @@ export function evaluateReadiness(
     }
   > = {};
 
+  // DIAGNOSTIC: Track per-module match counts
+  const _debugModuleKnitMatches: Record<string, { matched: number; total: number; missedSoLis: string[] }> = {};
+
   for (const sew of safeSewing) {
     const normKey = normalizeSoLi(sew.so_li);
     const soOnly = normKey ? normKey.split('/')[0] : (sew.so_li ? sew.so_li.split('/')[0] : '');
@@ -195,6 +209,18 @@ export function evaluateReadiness(
             || knitMap.get(sew.so_li?.trim()) 
             || knitMap.get(sew.so_li?.replace(/\s+/g, ''))
             || (soOnly ? soKnitMap.get(soOnly) : undefined);
+
+    // DIAGNOSTIC: Track per-module knitting matches
+    const _mod = sew.module || 'UNKNOWN';
+    if (!_debugModuleKnitMatches[_mod]) _debugModuleKnitMatches[_mod] = { matched: 0, total: 0, missedSoLis: [] };
+    _debugModuleKnitMatches[_mod].total++;
+    if (knit) {
+      _debugModuleKnitMatches[_mod].matched++;
+    } else {
+      if (_debugModuleKnitMatches[_mod].missedSoLis.length < 3) {
+        _debugModuleKnitMatches[_mod].missedSoLis.push(sew.so_li || 'empty');
+      }
+    }
 
     let trims = trimsMap.get(normKey) 
              || trimsMap.get(sew.so_li?.trim()) 
@@ -352,6 +378,16 @@ export function evaluateReadiness(
     else if (overallStatus === 'NO_DATA') mod.noDataCount += 1;
 
     mod.items.push(itemObj);
+  }
+
+  // DIAGNOSTIC: Log per-module knitting match results
+  console.log('[MatcherEngine] Per-module knitting match results:');
+  for (const [mod, info] of Object.entries(_debugModuleKnitMatches)) {
+    if (info.matched < info.total) {
+      console.warn(`  ${mod}: ${info.matched}/${info.total} matched. Missed SO_LIs:`, info.missedSoLis);
+    } else {
+      console.log(`  ${mod}: ${info.matched}/${info.total} ✓`);
+    }
   }
 
   // Sort items by Planned Date ascending, then Module

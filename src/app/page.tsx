@@ -39,6 +39,10 @@ export default function DashboardPage() {
 
   // Run the core matching engine across sewing, knitting and trims records
   const { items, metrics, moduleSummaries } = useMemo(() => {
+    console.log('[Dashboard] Dataset sizes → sewingPlan:', dataset.sewingPlan?.length, 'knittingPlan:', dataset.knittingPlan?.length, 'trimsPlan:', dataset.trimsPlan?.length);
+    if (dataset.knittingPlan?.length > 0) {
+      console.log('[Dashboard] First knitting row:', JSON.stringify(dataset.knittingPlan[0]).substring(0, 200));
+    }
     return evaluateReadiness(
       dataset.sewingPlan,
       dataset.knittingPlan,
