@@ -129,8 +129,24 @@ export function parseExcelDate(val: any): string {
     return date.toISOString().split('T')[0];
   }
   const str = String(val).trim();
+  
+  // Handle DD-MMM format manually to avoid 2001 bug
+  const match = str.match(/^([0-9]{1,2})[-/\s]([a-zA-Z]{3})/i);
+  if (match) {
+    const day = parseInt(match[1], 10);
+    const monthNames = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+    const mIdx = monthNames.indexOf(match[2].toLowerCase());
+    if (mIdx >= 0) {
+      const d = new Date(new Date().getFullYear(), mIdx, day);
+      return d.toISOString().split('T')[0];
+    }
+  }
+
   const parsed = new Date(str);
   if (!isNaN(parsed.getTime())) {
+    if (parsed.getFullYear() < 2010) {
+      parsed.setFullYear(new Date().getFullYear());
+    }
     return parsed.toISOString().split('T')[0];
   }
   return str;
