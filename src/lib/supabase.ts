@@ -32,14 +32,36 @@ export const supabase: SupabaseClient | null = isSupabaseConfigured()
 // Local storage key for offline / demo mode overrides
 const LOCAL_STORAGE_KEY = 'sewing_tracker_local_dataset_v1';
 
+async function fetchAllRows(tableName: string) {
+  if (!supabase) return { data: null, error: 'No client' };
+  let allData: any[] = [];
+  let from = 0;
+  const limit = 1000;
+  
+  while (true) {
+    const { data, error } = await supabase
+      .from(tableName)
+      .select('*')
+      .range(from, from + limit - 1);
+      
+    if (error) return { data: null, error };
+    if (!data || data.length === 0) break;
+    
+    allData = allData.concat(data);
+    if (data.length < limit) break;
+    from += limit;
+  }
+  return { data: allData, error: null };
+}
+
 export async function getActiveDataset(): Promise<AppDataset> {
   // If Supabase is configured, fetch latest tables
   if (isSupabaseConfigured() && supabase) {
     try {
       const [sewingRes, knitRes, trimsRes, metaRes] = await Promise.all([
-        supabase.from('sewing_plan').select('*'),
-        supabase.from('knitting_plan').select('*'),
-        supabase.from('trims_plan').select('*'),
+        fetchAllRows('sewing_plan'),
+        fetchAllRows('knitting_plan'),
+        fetchAllRows('trims_plan'),
         supabase.from('upload_metadata').select('*').order('uploaded_at', { ascending: false }),
       ]);
 
