@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+// Clean URL: strip trailing /rest/v1/, trailing slashes, and whitespace
+const rawUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL || '').trim();
+const supabaseUrl = rawUrl.replace(/\/rest\/v1\/?$/, '').replace(/\/+$/, '');
+const supabaseKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '').trim();
 
 const isConfigured = Boolean(
   supabaseUrl &&
@@ -35,7 +37,8 @@ export async function POST(req: NextRequest) {
     // Map according to table
     if (fileType === 'sewing') {
       // Overwrite sewing_plan table
-      await supabase.from('sewing_plan').delete().neq('id', -1);
+      const { error: delErr } = await supabase.from('sewing_plan').delete().neq('id', -1);
+      if (delErr) throw new Error(`Delete sewing_plan failed: ${delErr.message}`);
 
       // Batch insert in chunks of 500
       const dbRows = rows.map((r: any) => ({
@@ -59,7 +62,8 @@ export async function POST(req: NextRequest) {
       }
     } else if (fileType === 'knitting') {
       // Overwrite knitting_plan table
-      await supabase.from('knitting_plan').delete().neq('id', -1);
+      const { error: delErr2 } = await supabase.from('knitting_plan').delete().neq('id', -1);
+      if (delErr2) throw new Error(`Delete knitting_plan failed: ${delErr2.message}`);
 
       const dbRows = rows.map((r: any) => ({
         so_li: r.so_li,
@@ -82,7 +86,8 @@ export async function POST(req: NextRequest) {
       }
     } else if (fileType === 'trims') {
       // Overwrite trims_plan table
-      await supabase.from('trims_plan').delete().neq('id', -1);
+      const { error: delErr3 } = await supabase.from('trims_plan').delete().neq('id', -1);
+      if (delErr3) throw new Error(`Delete trims_plan failed: ${delErr3.message}`);
 
       const dbRows = rows.map((r: any) => ({
         soli: r.soli,

@@ -8,8 +8,12 @@ import {
 } from './types';
 import { INITIAL_DATASET } from './sampleData';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+// Clean URL: strip trailing /rest/v1/, /rest/v1, trailing slashes, and whitespace
+const rawSupabaseUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL || '').trim();
+const supabaseUrl = rawSupabaseUrl
+  .replace(/\/rest\/v1\/?$/, '')
+  .replace(/\/+$/, '');
+const supabaseAnonKey = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '').trim();
 
 export const isSupabaseConfigured = (): boolean => {
   return Boolean(
@@ -119,17 +123,19 @@ export async function getActiveDataset(): Promise<AppDataset> {
           }
         }
 
-        if (sewingPlan.length > 0 || knittingPlan.length > 0 || trimsPlan.length > 0) {
-          return {
-            sewingPlan,
-            knittingPlan,
-            trimsPlan,
-            metadata: {
-              ...metadata,
-              lastUpdated: new Date().toISOString(),
-            },
-          };
-        }
+        // Always return Supabase data when connected, even if tables are empty.
+        // This prevents fallback to localStorage/demo data on other devices.
+        return {
+          sewingPlan,
+          knittingPlan,
+          trimsPlan,
+          metadata: {
+            ...metadata,
+            lastUpdated: metadataList.length > 0
+              ? metadataList[0].uploaded_at
+              : new Date().toISOString(),
+          },
+        };
       }
     } catch (err) {
       console.warn('Supabase fetch failed, falling back to local dataset:', err);
