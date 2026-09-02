@@ -58,11 +58,12 @@ export async function getActiveDataset(): Promise<AppDataset> {
   // If Supabase is configured, fetch latest tables
   if (isSupabaseConfigured() && supabase) {
     try {
-      const [sewingRes, knitRes, trimsRes, metaRes] = await Promise.all([
+      const [sewingRes, knitRes, trimsRes, metaRes, overridesRes] = await Promise.all([
         fetchAllRows('sewing_plan'),
         fetchAllRows('knitting_plan'),
         fetchAllRows('trims_plan'),
         supabase.from('upload_metadata').select('*').order('uploaded_at', { ascending: false }),
+        fetchAllRows('manual_overrides').catch(() => ({ data: [], error: null }))
       ]);
 
       if (!sewingRes.error && !knitRes.error && !trimsRes.error) {
@@ -145,12 +146,22 @@ export async function getActiveDataset(): Promise<AppDataset> {
           }
         }
 
+        const overrides: Record<string, string> = {};
+        if (overridesRes && overridesRes.data) {
+          (overridesRes.data as any[]).forEach(r => {
+            if (r.so_li && r.override_status) {
+              overrides[r.so_li] = r.override_status;
+            }
+          });
+        }
+
         // Always return Supabase data when connected, even if tables are empty.
         // This prevents fallback to localStorage/demo data on other devices.
         return {
           sewingPlan,
           knittingPlan,
           trimsPlan,
+          overrides,
           metadata: {
             ...metadata,
             lastUpdated: metadataList.length > 0

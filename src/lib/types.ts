@@ -128,6 +128,7 @@ export interface AppDataset {
   sewingPlan: SewingPlanRow[];
   knittingPlan: KnittingPlanRow[];
   trimsPlan: TrimsPlanRow[];
+  overrides: Record<string, string>;
   metadata: {
     sewing?: UploadMetadataRecord;
     knitting?: UploadMetadataRecord;

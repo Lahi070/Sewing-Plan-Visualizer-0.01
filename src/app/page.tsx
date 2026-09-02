@@ -46,7 +46,8 @@ export default function DashboardPage() {
     return evaluateReadiness(
       dataset.sewingPlan,
       dataset.knittingPlan,
-      dataset.trimsPlan
+      dataset.trimsPlan,
+      dataset.overrides
     );
   }, [dataset]);
 

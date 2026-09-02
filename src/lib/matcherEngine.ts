@@ -52,6 +52,7 @@ export function evaluateReadiness(
   sewingPlan: SewingPlanRow[] = [],
   knittingPlan: KnittingPlanRow[] = [],
   trimsPlan: TrimsPlanRow[] = [],
+  overrides: Record<string, string> = {},
   anchorDate: Date = new Date()
 ): {
   items: MatchedReadinessItem[];
@@ -219,6 +220,14 @@ export function evaluateReadiness(
     } else if (cleanMod && moduleTrimsStatusMap.has(cleanMod)) {
       trimsFound = true;
       trimsStatus = moduleTrimsStatusMap.get(cleanMod) || 'NO';
+      trimsReady = isTrimsReady(trimsStatus);
+    }
+
+    // -- APPLY MANUAL OVERRIDES --
+    if (overrides[sew.so_li]) {
+      const overrideVal = overrides[sew.so_li];
+      trimsFound = true;
+      trimsStatus = overrideVal;
       trimsReady = isTrimsReady(trimsStatus);
     }
 

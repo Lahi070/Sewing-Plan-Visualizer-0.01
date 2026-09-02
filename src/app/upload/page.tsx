@@ -26,6 +26,7 @@ import {
   parseTrimsReadinessWorkbook,
   discoverTrimsDatedSheets,
 } from '@/lib/excelParser';
+import { evaluateReadiness } from '@/lib/matcherEngine';
 import {
   getActiveDataset,
   saveLocalDataset,
@@ -41,12 +42,71 @@ export default function AdminUploadPage() {
 
   // Auth State
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
-  const [passwordInput, setPasswordInput] = useState<string>('');
-  const [authError, setAuthError] = useState<string | null>(null);
-  const [isVerifying, setIsVerifying] = useState<boolean>(false);
+  const [passwordInput, setPasswordInput] = useState('');
+  const [authError, setAuthError] = useState('');
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [overrideSearch, setOverrideSearch] = useState('');
+  const [isOverriding, setIsOverriding] = useState<string | null>(null);
 
   // Dataset & Staged uploads state
   const [currentDataset, setCurrentDataset] = useState<AppDataset>(INITIAL_DATASET);
+
+  // Compute readiness to display for Overrides
+  const { items: evaluatedItems } = React.useMemo(() => {
+    return evaluateReadiness(
+      currentDataset.sewingPlan,
+      currentDataset.knittingPlan,
+      currentDataset.trimsPlan,
+      currentDataset.overrides || {}
+    );
+  }, [currentDataset]);
+
+  const filteredOverrides = React.useMemo(() => {
+    if (!overrideSearch) return evaluatedItems;
+    const lower = overrideSearch.toLowerCase();
+    return evaluatedItems.filter(i => 
+      i.module.toLowerCase().includes(lower) || 
+      i.so_li.toLowerCase().includes(lower) || 
+      (i.customer && i.customer.toLowerCase().includes(lower))
+    );
+  }, [evaluatedItems, overrideSearch]);
+
+  const toggleOverride = async (so_li: string, currentStatus: string) => {
+    try {
+      setIsOverriding(so_li);
+      const isManual = currentDataset.overrides && currentDataset.overrides[so_li];
+      // If it has an override, remove it (DELETE)
+      // Otherwise, mark as NOT READY (UPSERT 'NO')
+      const action = isManual ? 'DELETE' : 'UPSERT';
+      const status = 'NO';
+      
+      const res = await fetch('/api/override', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ so_li, action, status })
+      });
+      
+      if (!res.ok) throw new Error('Failed to update override');
+      
+      // Update local state
+      const newOverrides = { ...(currentDataset.overrides || {}) };
+      if (isManual) {
+        delete newOverrides[so_li];
+      } else {
+        newOverrides[so_li] = 'NO';
+      }
+      
+      const nextData = { ...currentDataset, overrides: newOverrides };
+      setCurrentDataset(nextData);
+      
+    } catch (e) {
+      alert('Failed to save manual override.');
+      console.error(e);
+    } finally {
+      setIsOverriding(null);
+    }
+  };
+
   const [stagedSewing, setStagedSewing] = useState<{
     rows: SewingPlanRow[];
     fileName: string;
@@ -594,6 +654,88 @@ export default function AdminUploadPage() {
             </div>
           </div>
         )}
+        {/* Manual Overrides Section */}
+        <div className="rounded-3xl border border-navy-700/80 bg-gradient-to-br from-navy-850 to-navy-900 p-6 sm:p-8 shadow-xl shadow-navy-950/40 backdrop-blur-md">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+            <div>
+              <h2 className="text-lg font-extrabold text-white">Manual Status Overrides</h2>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Force Trims status to "Not Ready" if physical availability does not match Excel data.
+              </p>
+            </div>
+            <input
+              type="text"
+              placeholder="Search SO/LI or Module..."
+              value={overrideSearch}
+              onChange={e => setOverrideSearch(e.target.value)}
+              className="bg-navy-950/80 border border-navy-700 rounded-xl px-4 py-2 text-xs text-white placeholder-slate-500 min-w-[250px] focus:ring-1 focus:ring-cyan-500"
+            />
+          </div>
+
+          <div className="overflow-x-auto rounded-xl border border-navy-800 bg-navy-950/50">
+            <table className="min-w-full divide-y divide-navy-800 text-xs">
+              <thead className="bg-navy-900/80">
+                <tr>
+                  <th className="px-4 py-3 text-left font-bold text-slate-300">Module</th>
+                  <th className="px-4 py-3 text-left font-bold text-slate-300">SO/LI</th>
+                  <th className="px-4 py-3 text-left font-bold text-slate-300">Planned Date</th>
+                  <th className="px-4 py-3 text-left font-bold text-slate-300">Current Trims Status</th>
+                  <th className="px-4 py-3 text-right font-bold text-slate-300">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-navy-800">
+                {filteredOverrides.slice(0, 50).map((item) => {
+                  const hasManualOverride = currentDataset.overrides?.[item.so_li];
+                  const trimsStatus = hasManualOverride ? 'NOT READY (Manual)' : (item.trimsReady ? 'READY' : 'NOT READY');
+                  
+                  return (
+                    <tr key={item.so_li} className="hover:bg-navy-800/30">
+                      <td className="px-4 py-3 whitespace-nowrap font-medium text-cyan-400">{item.module}</td>
+                      <td className="px-4 py-3 whitespace-nowrap text-slate-300">{item.so_li}</td>
+                      <td className="px-4 py-3 whitespace-nowrap text-slate-400">{item.plannedDate || '-'}</td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold ${
+                          trimsStatus.includes('READY') && !trimsStatus.includes('NOT')
+                            ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                            : 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                        }`}>
+                          {trimsStatus}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-right">
+                        <button
+                          onClick={() => toggleOverride(item.so_li, trimsStatus)}
+                          disabled={isOverriding === item.so_li}
+                          className={`px-3 py-1.5 rounded-lg font-bold text-[10px] transition-colors ${
+                            hasManualOverride
+                              ? 'bg-navy-700 hover:bg-navy-600 text-white border border-navy-500'
+                              : 'bg-rose-600/20 hover:bg-rose-600/40 text-rose-300 border border-rose-500/30'
+                          }`}
+                        >
+                          {isOverriding === item.so_li ? 'Saving...' : hasManualOverride ? 'Remove Override' : 'Mark Not Ready'}
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {filteredOverrides.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="px-4 py-8 text-center text-slate-500">
+                      No modules found matching your search.
+                    </td>
+                  </tr>
+                )}
+                {filteredOverrides.length > 50 && (
+                  <tr>
+                    <td colSpan={5} className="px-4 py-3 text-center text-slate-500 text-[11px]">
+                      Showing first 50 results. Use search to find specific SO/LIs.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </main>
     </div>
   );
