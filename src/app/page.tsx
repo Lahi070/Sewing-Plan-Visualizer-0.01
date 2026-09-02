@@ -142,8 +142,8 @@ export default function DashboardPage() {
           <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-6">
             <span>Sewing Floor Operations • Garment Manufacturing</span>
             <span className="hidden sm:inline text-navy-700">|</span>
-            <span className="flex items-center gap-1.5 text-cyan-400 font-medium">
-              W.A. Lahiru S. Dissanayake • Contact: 070 2416664
+            <span className="flex items-center gap-1.5">
+              Developer: W.A. Lahiru S. Dissanayake • Contact: 070 2416664
             </span>
           </div>
           <span className="text-[11px] text-slate-500">
