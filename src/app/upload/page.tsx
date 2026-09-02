@@ -152,7 +152,7 @@ export default function AdminUploadPage() {
 
   const handlePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setAuthError(null);
+    setAuthError('');
     setIsVerifying(true);
 
     try {
@@ -262,6 +262,7 @@ export default function AdminUploadPage() {
         sewingPlan: stagedSewing ? stagedSewing.rows : currentDataset.sewingPlan,
         knittingPlan: stagedKnitting ? stagedKnitting.rows : currentDataset.knittingPlan,
         trimsPlan: stagedTrims ? stagedTrims.rows : currentDataset.trimsPlan,
+        overrides: currentDataset.overrides || {},
         metadata: {
           ...currentDataset.metadata,
           lastUpdated: new Date().toISOString(),

@@ -73258,6 +73258,7 @@ export const INITIAL_DATASET: AppDataset = {
   sewingPlan: SAMPLE_SEWING_PLAN,
   knittingPlan: SAMPLE_KNITTING_PLAN,
   trimsPlan: SAMPLE_TRIMS_PLAN,
+  overrides: {},
   metadata: {
     sewing: {
       fileType: 'sewing',
