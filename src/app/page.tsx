@@ -138,8 +138,14 @@ export default function DashboardPage() {
 
       {/* Floor Footer */}
       <footer className="border-t border-navy-800 bg-navy-950/90 py-5 text-center text-xs text-slate-400 no-print mt-8">
-        <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
-          <span>Sewing Floor Operations • Garment Manufacturing</span>
+        <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-6">
+            <span>Sewing Floor Operations • Garment Manufacturing</span>
+            <span className="hidden sm:inline text-navy-700">|</span>
+            <span className="flex items-center gap-1.5 text-cyan-400 font-medium">
+              W.A. Lahiru S. Dissanayake • Contact: 070 2416664
+            </span>
+          </div>
           <span className="text-[11px] text-slate-500">
             Deployed on Vercel Hobby Free Tier • Backed by Supabase Postgres
           </span>
