@@ -16,6 +16,7 @@ import {
   AlertTriangle,
   XCircle,
   HelpCircle,
+  Loader2,
 } from 'lucide-react';
 import { MatchedReadinessItem, ReadinessStatus } from '@/lib/types';
 import { formatNumber, formatDate, getStatusConfig } from '@/lib/utils';
@@ -37,7 +38,10 @@ export function ReadinessTable({
   onSelectModule,
 }: ReadinessTableProps) {
   // Search & Filter state
+  const [searchInput, setSearchInput] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
+  
   const [selectedModule, setSelectedModule] = useState<string>('ALL');
   const [selectedCustomer, setSelectedCustomer] = useState<string>('ALL');
   const [dateFilter, setDateFilter] = useState<'ALL' | '3DAYS' | '7DAYS' | 'OVERDUE'>('ALL');
@@ -204,6 +208,22 @@ export function ReadinessTable({
     link.click();
     document.body.removeChild(link);
   };
+  
+  const handleSearchTrigger = () => {
+    setIsSearching(true);
+    // Add artificial delay to show loader, then set the actual search term used in useMemo
+    setTimeout(() => {
+      setSearchTerm(searchInput);
+      setCurrentPage(1);
+      setIsSearching(false);
+    }, 400);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      handleSearchTrigger();
+    }
+  };
 
   return (
     <div className="bg-gradient-to-br from-navy-850 to-navy-900 rounded-3xl border border-navy-700/80 shadow-xl shadow-navy-950/50 overflow-hidden backdrop-blur-md">
@@ -211,26 +231,45 @@ export function ReadinessTable({
       <div className="p-4 sm:p-5 border-b border-navy-700/70 bg-navy-900/60 space-y-4">
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3.5">
           {/* Search Box */}
-          <div className="relative flex-1 max-w-md">
-            <Search className="w-4 h-4 text-cyan-400/80 absolute left-3.5 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              placeholder="Search SO_LI, Style, Module, Customer..."
-              value={searchTerm}
-              onChange={(e) => {
-                setSearchTerm(e.target.value);
-                setCurrentPage(1);
-              }}
-              className="w-full pl-10 pr-4 py-2.5 bg-navy-950/80 border border-navy-700/80 rounded-xl text-xs font-medium text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 transition-all"
-            />
-            {searchTerm && (
-              <button
-                onClick={() => setSearchTerm('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-white"
-              >
-                ✕
-              </button>
-            )}
+          <div className="flex flex-1 max-w-md gap-2">
+            <div className="relative flex-1">
+              <Search className="w-4 h-4 text-cyan-400/80 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="Search SO_LI, Style, Module, Customer..."
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                className="w-full pl-10 pr-4 py-2.5 bg-navy-950/80 border border-navy-700/80 rounded-xl text-xs font-medium text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 transition-all"
+              />
+              {searchInput && (
+                <button
+                  onClick={() => {
+                    setSearchInput('');
+                    setSearchTerm('');
+                    setCurrentPage(1);
+                  }}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-white"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+            
+            <button
+              onClick={handleSearchTrigger}
+              disabled={isSearching}
+              className="flex items-center justify-center gap-1.5 px-4 bg-cyan-600 hover:bg-cyan-500 active:scale-95 transition-all text-white rounded-xl text-xs font-bold border border-cyan-500/50 shadow-lg shadow-cyan-500/20 disabled:opacity-50 disabled:pointer-events-none"
+            >
+              {isSearching ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>Wait...</span>
+                </>
+              ) : (
+                <span>Search</span>
+              )}
+            </button>
           </div>
 
           {/* Filters Row */}
