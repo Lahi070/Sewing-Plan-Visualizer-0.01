@@ -179,14 +179,32 @@ export default function AdminUploadPage() {
   // 1. Sewing Plan Parse Handler
   const handleSewingParsed = ({ fileName, workbook }: { fileName: string; workbook: XLSX.WorkBook }) => {
     try {
+      // Debug: log actual column headers from the sheet
+      const sheetName = workbook.SheetNames.find(n => n.toLowerCase() === 'sheet1') || workbook.SheetNames[0];
+      const ws = workbook.Sheets[sheetName];
+      const rawRows: any[] = XLSX.utils.sheet_to_json(ws, { defval: '' });
+      if (rawRows.length > 0) {
+        console.log('[DEBUG] Sewing Plan sheet:', sheetName);
+        console.log('[DEBUG] Sewing column headers:', Object.keys(rawRows[0]));
+        console.log('[DEBUG] First row sample:', rawRows[0]);
+      }
+
       const { rows, sheetUsed, totalSkipped } = parseSewingPlanWorkbook(workbook);
+
+      if (rows.length === 0) {
+        setSyncStatus({
+          type: 'error',
+          message: `⚠️ Sewing Plan parsed 0 valid rows (${totalSkipped} skipped). Column headers may not match. Open browser Console (F12) to see detected column names.`
+        });
+      }
+
       setStagedSewing({
         rows,
         fileName,
         sheetUsed,
         skippedCount: totalSkipped,
       });
-      setSyncStatus({ type: null, message: '' });
+      if (rows.length > 0) setSyncStatus({ type: null, message: '' });
     } catch (err: any) {
       alert(`Error in Pre Work Plan: ${err.message}`);
     }
