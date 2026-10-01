@@ -281,7 +281,7 @@ export default function AdminUploadPage() {
         };
         updatedDataset.metadata.sewing = metadata;
 
-        await fetch('/api/sync', {
+        const res = await fetch('/api/sync', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -290,6 +290,10 @@ export default function AdminUploadPage() {
             metadata,
           }),
         });
+        if (!res.ok) {
+          const errData = await res.json();
+          throw new Error(`Sewing sync failed: ${errData.error || res.statusText}`);
+        }
       }
 
       // 2. Sync Knitting Plan if staged
@@ -304,7 +308,7 @@ export default function AdminUploadPage() {
         };
         updatedDataset.metadata.knitting = metadata;
 
-        await fetch('/api/sync', {
+        const res = await fetch('/api/sync', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -313,6 +317,10 @@ export default function AdminUploadPage() {
             metadata,
           }),
         });
+        if (!res.ok) {
+          const errData = await res.json();
+          throw new Error(`Knitting sync failed: ${errData.error || res.statusText}`);
+        }
       }
 
       // 3. Sync Trims Plan if staged
@@ -327,7 +335,7 @@ export default function AdminUploadPage() {
         };
         updatedDataset.metadata.trims = metadata;
 
-        await fetch('/api/sync', {
+        const res = await fetch('/api/sync', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -336,6 +344,10 @@ export default function AdminUploadPage() {
             metadata,
           }),
         });
+        if (!res.ok) {
+          const errData = await res.json();
+          throw new Error(`Trims sync failed: ${errData.error || res.statusText}`);
+        }
       }
 
       // Save locally as well

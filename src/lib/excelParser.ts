@@ -203,7 +203,7 @@ export function parseSewingPlanWorkbook(workbook: XLSX.WorkBook): {
     const so_li = extractRowSoLi(r);
     const plannedDate = parseExcelDate(r['Date'] ?? r['date'] ?? r['Planned Date'] ?? r['Sewing Date'] ?? r['PSD']);
 
-    if (!so_li) {
+    if (!so_li || !plannedDate) {
       totalSkipped++;
       continue;
     }
