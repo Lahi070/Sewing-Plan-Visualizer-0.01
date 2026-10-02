@@ -174,40 +174,52 @@ export function parseSewingPlanWorkbook(workbook: XLSX.WorkBook): {
   sheetUsed: string;
   totalSkipped: number;
 } {
-  // Find the best sheet — prefer a "sewing plan" named sheet, avoid summary/pivot/SAH
-  let sheetName = workbook.SheetNames.find((name) => {
-    const lower = name.toLowerCase();
-    return (lower.includes('sewing') || lower.includes('plan')) && !lower.includes('summary');
-  });
+  // To make this completely foolproof for future months regardless of sheet naming,
+  // we will try parsing all sheets (except summaries/pivots) and pick the one that yields the most valid rows.
+  let bestSheet = '';
+  let bestRows: SewingPlanRow[] = [];
+  let bestSkipped = 0;
 
-  if (!sheetName) {
-    // Fallback: Pick the first sheet that isn't a known bad name
-    sheetName = workbook.SheetNames.find((name) => {
-      const lower = name.toLowerCase();
-      return (
-        !lower.includes('summary') &&
-        !lower.includes('pivot') &&
-        !lower.includes('sah') &&
-        !lower.includes('sheet2') &&
-        !lower.includes('sheet3')
-      );
-    }) || workbook.SheetNames[0]; // Absolute fallback
+  for (const sheetName of workbook.SheetNames) {
+    const lower = sheetName.toLowerCase();
+    if (lower.includes('summary') || lower.includes('pivot') || lower.includes('sah')) {
+      continue;
+    }
+
+    const worksheet = workbook.Sheets[sheetName];
+    if (!worksheet) continue;
+
+    const rawRows: any[] = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
+    if (rawRows.length === 0) continue;
+
+    const { rows, totalSkipped } = extractSewingRowsFromRaw(rawRows, sheetName);
+    
+    if (rows.length > bestRows.length) {
+      bestRows = rows;
+      bestSheet = sheetName;
+      bestSkipped = totalSkipped;
+    }
   }
 
-  const worksheet = workbook.Sheets[sheetName];
-  if (!worksheet) {
-    throw new Error(`Could not find sheet [${sheetName}] in sewing plan file.`);
+  // Fallback to first sheet if nothing worked
+  if (bestRows.length === 0 && workbook.SheetNames.length > 0) {
+    bestSheet = workbook.SheetNames[0];
+    const ws = workbook.Sheets[bestSheet];
+    const rawRows = ws ? XLSX.utils.sheet_to_json(ws, { defval: '' }) : [];
+    const { rows, totalSkipped } = extractSewingRowsFromRaw(rawRows, bestSheet);
+    bestRows = rows;
+    bestSkipped = totalSkipped;
   }
 
-  const rawRows: any[] = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
-  if (rawRows.length === 0) return { rows: [], sheetUsed: sheetName, totalSkipped: 0 };
+  return { rows: bestRows, sheetUsed: bestSheet || 'Unknown', totalSkipped: bestSkipped };
+}
 
+function extractSewingRowsFromRaw(rawRows: any[], sheetName: string): { rows: SewingPlanRow[]; totalSkipped: number } {
   const rows: SewingPlanRow[] = [];
   let totalSkipped = 0;
 
   // ─── Detect if this is WIDE FORMAT ───
-  // Wide format = there are columns whose header parses as a real calendar date
-  const allKeys = Object.keys(rawRows[0]);
+  const allKeys = Object.keys(rawRows[0] || {});
   const dateColumns: { key: string; isoDate: string }[] = [];
   for (const key of allKeys) {
     const parsed = parseExcelDate(key);
@@ -220,8 +232,7 @@ export function parseSewingPlanWorkbook(workbook: XLSX.WorkBook): {
     }
   }
 
-  const isWideFormat = dateColumns.length >= 3; // at least 3 date columns = wide format
-  console.log('[SewingParser] Sheet:', sheetName, '| Wide format:', isWideFormat, '| Date cols:', dateColumns.length);
+  const isWideFormat = dateColumns.length >= 3; 
 
   let lastModuleName = 'M01';
 
@@ -321,7 +332,7 @@ export function parseSewingPlanWorkbook(workbook: XLSX.WorkBook): {
     }
   }
 
-  return { rows, sheetUsed: sheetName, totalSkipped };
+  return { rows, totalSkipped };
 }
 
 
