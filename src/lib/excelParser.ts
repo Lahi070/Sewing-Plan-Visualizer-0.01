@@ -154,17 +154,27 @@ export function parseExcelDate(val: any): string {
 
 /**
  * 1. Parse Pre Work Sewing Plan file
+ * Supports both:
+ *   - Long format: columns "Date", "Qty" per row
+ *   - Wide format: date columns as headers (e.g. "9/23/2026", "10/1/2026") with qty as cell values
  */
 export function parseSewingPlanWorkbook(workbook: XLSX.WorkBook): {
   rows: SewingPlanRow[];
   sheetUsed: string;
   totalSkipped: number;
 } {
+  // Find the best sheet — prefer a "sewing plan" named sheet, avoid summary/pivot/SAH
   let sheetName = workbook.SheetNames.find((name) => name.toLowerCase() === 'sheet1');
   if (!sheetName) {
     sheetName = workbook.SheetNames.find((name) => {
       const lower = name.toLowerCase();
-      return !lower.includes('summary') && !lower.includes('pivot');
+      return (
+        !lower.includes('summary') &&
+        !lower.includes('pivot') &&
+        !lower.includes('sah') &&
+        !lower.includes('sheet2') &&
+        !lower.includes('sheet3')
+      );
     }) || workbook.SheetNames[0];
   }
 
@@ -174,56 +184,130 @@ export function parseSewingPlanWorkbook(workbook: XLSX.WorkBook): {
   }
 
   const rawRows: any[] = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
+  if (rawRows.length === 0) return { rows: [], sheetUsed: sheetName, totalSkipped: 0 };
+
   const rows: SewingPlanRow[] = [];
   let totalSkipped = 0;
-  
+
+  // ─── Detect if this is WIDE FORMAT ───
+  // Wide format = there are columns whose header parses as a real calendar date
+  const allKeys = Object.keys(rawRows[0]);
+  const dateColumns: { key: string; isoDate: string }[] = [];
+  for (const key of allKeys) {
+    const parsed = parseExcelDate(key);
+    // Accept if parsed looks like a real YYYY-MM-DD and year is reasonable
+    if (parsed && /^\d{4}-\d{2}-\d{2}$/.test(parsed)) {
+      const yr = parseInt(parsed.substring(0, 4), 10);
+      if (yr >= 2020 && yr <= 2035) {
+        dateColumns.push({ key, isoDate: parsed });
+      }
+    }
+  }
+
+  const isWideFormat = dateColumns.length >= 3; // at least 3 date columns = wide format
+  console.log('[SewingParser] Sheet:', sheetName, '| Wide format:', isWideFormat, '| Date cols:', dateColumns.length);
+
   let lastModuleName = 'M01';
 
-  for (const r of rawRows) {
-    // 1. Always update lastModuleName first in case this is a grouping header row without qty
-    const moduleRaw = r['Module'] ?? r['Module#'] ?? r['module'] ?? r['Line'] ?? r['Line#'] ?? r['Module No'] ?? r['Sewing Line'] ?? r['Line Name'];
-    if (moduleRaw !== undefined && moduleRaw !== null && String(moduleRaw).trim() !== '') {
-      lastModuleName = normalizeModuleName(String(moduleRaw)) || 'M01';
+  if (isWideFormat) {
+    // ─── WIDE FORMAT PARSING ───
+    // Each row is one SO_LI; each date-column cell is the planned qty for that date.
+    for (const r of rawRows) {
+      // Track module
+      const moduleRaw = r['Module'] ?? r['Module#'] ?? r['module'] ?? r['Line'] ?? r['Line#'] ?? r['Module No'] ?? r['Sewing Line'] ?? r['Line Name'];
+      if (moduleRaw !== undefined && moduleRaw !== null && String(moduleRaw).trim() !== '') {
+        lastModuleName = normalizeModuleName(String(moduleRaw)) || lastModuleName;
+      }
+      const moduleNo = lastModuleName;
+
+      const so_li = extractRowSoLi(r);
+      if (!so_li) {
+        totalSkipped++;
+        continue;
+      }
+
+      const customer = String(r['Customer'] ?? r['customer'] ?? r['Buyer'] ?? '').trim();
+      const style = String(r['Style'] ?? r['style'] ?? r['Style#'] ?? r['Product'] ?? '').trim();
+      const productType = String(r['Produt Type'] ?? r['Product Type'] ?? r['Cat'] ?? r['Category'] ?? '').trim();
+      const cw = String(r['CW'] ?? r['Color way'] ?? r['Color'] ?? '').trim();
+      const smv = Number(r['SMV'] ?? 0) || 0;
+
+      // For each date column, if the cell has a positive qty, emit one row
+      let emittedForThisRow = 0;
+      for (const { key, isoDate } of dateColumns) {
+        const cellVal = r[key];
+        if (cellVal === '' || cellVal === '-' || cellVal === undefined || cellVal === null) continue;
+        const qty = typeof cellVal === 'number' ? cellVal : parseFloat(String(cellVal).replace(/,/g, ''));
+        if (isNaN(qty) || qty <= 0) continue;
+
+        rows.push({
+          module: moduleNo,
+          customer,
+          style,
+          productType,
+          cw,
+          so_li,
+          smv,
+          plannedDate: isoDate,
+          qty,
+          sah: smv > 0 ? Math.round((qty * smv) / 60 * 100) / 100 : 0,
+        });
+        emittedForThisRow++;
+      }
+
+      if (emittedForThisRow === 0) {
+        totalSkipped++;
+      }
     }
-    const moduleNo = lastModuleName;
+  } else {
+    // ─── LONG FORMAT PARSING (original logic) ───
+    for (const r of rawRows) {
+      // 1. Always update lastModuleName first
+      const moduleRaw = r['Module'] ?? r['Module#'] ?? r['module'] ?? r['Line'] ?? r['Line#'] ?? r['Module No'] ?? r['Sewing Line'] ?? r['Line Name'];
+      if (moduleRaw !== undefined && moduleRaw !== null && String(moduleRaw).trim() !== '') {
+        lastModuleName = normalizeModuleName(String(moduleRaw)) || lastModuleName;
+      }
+      const moduleNo = lastModuleName;
 
-    // 2. Then check if row has actual data
-    const rawQty = r['Qty'] ?? r['qty'] ?? r['QTY'] ?? r['Planned Qty'] ?? r['Sew Qty'] ?? r['Quantity'];
-    if (rawQty === '-' || rawQty === '' || rawQty === undefined || rawQty === null) {
-      totalSkipped++;
-      continue;
+      // 2. Check if row has actual qty
+      const rawQty = r['Qty'] ?? r['qty'] ?? r['QTY'] ?? r['Planned Qty'] ?? r['Sew Qty'] ?? r['Quantity'];
+      if (rawQty === '-' || rawQty === '' || rawQty === undefined || rawQty === null) {
+        totalSkipped++;
+        continue;
+      }
+
+      const qty = typeof rawQty === 'number' ? rawQty : parseFloat(String(rawQty).replace(/,/g, ''));
+      if (isNaN(qty) || qty <= 0) {
+        totalSkipped++;
+        continue;
+      }
+
+      const so_li = extractRowSoLi(r);
+      const plannedDate = parseExcelDate(r['Date'] ?? r['date'] ?? r['Planned Date'] ?? r['Sewing Date'] ?? r['PSD']);
+
+      if (!so_li || !plannedDate) {
+        totalSkipped++;
+        continue;
+      }
+
+      rows.push({
+        module: moduleNo,
+        customer: String(r['Customer'] ?? r['customer'] ?? r['Buyer'] ?? '').trim(),
+        style: String(r['Style'] ?? r['style'] ?? r['Style#'] ?? r['Product'] ?? '').trim(),
+        productType: String(r['Produt Type'] ?? r['Product Type'] ?? r['Cat'] ?? r['Category'] ?? '').trim(),
+        cw: String(r['CW'] ?? r['Color way'] ?? r['Color'] ?? '').trim(),
+        so_li,
+        smv: Number(r['SMV'] ?? 0) || 0,
+        plannedDate,
+        qty,
+        sah: Number(r['SAH'] ?? 0) || 0,
+      });
     }
-
-    const qty = typeof rawQty === 'number' ? rawQty : parseFloat(String(rawQty).replace(/,/g, ''));
-    if (isNaN(qty) || qty <= 0) {
-      totalSkipped++;
-      continue;
-    }
-
-    const so_li = extractRowSoLi(r);
-    const plannedDate = parseExcelDate(r['Date'] ?? r['date'] ?? r['Planned Date'] ?? r['Sewing Date'] ?? r['PSD']);
-
-    if (!so_li || !plannedDate) {
-      totalSkipped++;
-      continue;
-    }
-
-    rows.push({
-      module: moduleNo,
-      customer: String(r['Customer'] ?? r['customer'] ?? r['Buyer'] ?? '').trim(),
-      style: String(r['Style'] ?? r['style'] ?? r['Style#'] ?? r['Product'] ?? '').trim(),
-      productType: String(r['Produt Type'] ?? r['Product Type'] ?? r['Cat'] ?? r['Category'] ?? '').trim(),
-      cw: String(r['CW'] ?? r['Color way'] ?? r['Color'] ?? '').trim(),
-      so_li,
-      smv: Number(r['SMV'] ?? 0) || 0,
-      plannedDate,
-      qty,
-      sah: Number(r['SAH'] ?? 0) || 0,
-    });
   }
 
   return { rows, sheetUsed: sheetName, totalSkipped };
 }
+
 
 /**
  * 2. Parse Knitting WIP file
