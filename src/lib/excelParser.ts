@@ -119,14 +119,20 @@ export function parseExcelDate(val: any): string {
   if (!val || val === '-' || val === ' ' || val === 'N/A') return '';
   if (val instanceof Date) {
     if (isNaN(val.getTime())) return '';
-    return val.toISOString().split('T')[0];
+    const y = val.getFullYear();
+    const m = String(val.getMonth() + 1).padStart(2, '0');
+    const d = String(val.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
   }
   const num = Number(val);
   if (!isNaN(num) && num > 30000 && num < 65000) {
     const utc_days = Math.floor(num - 25569);
     const utc_value = utc_days * 86400;
     const date = new Date(utc_value * 1000);
-    return date.toISOString().split('T')[0];
+    const y = date.getUTCFullYear();
+    const m = String(date.getUTCMonth() + 1).padStart(2, '0');
+    const d = String(date.getUTCDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
   }
   const str = String(val).trim();
   
@@ -137,8 +143,10 @@ export function parseExcelDate(val: any): string {
     const monthNames = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
     const mIdx = monthNames.indexOf(match[2].toLowerCase());
     if (mIdx >= 0) {
-      const d = new Date(new Date().getFullYear(), mIdx, day);
-      return d.toISOString().split('T')[0];
+      const y = new Date().getFullYear();
+      const m = String(mIdx + 1).padStart(2, '0');
+      const d = String(day).padStart(2, '0');
+      return `${y}-${m}-${d}`;
     }
   }
 
@@ -147,7 +155,10 @@ export function parseExcelDate(val: any): string {
     if (parsed.getFullYear() < 2010) {
       parsed.setFullYear(new Date().getFullYear());
     }
-    return parsed.toISOString().split('T')[0];
+    const y = parsed.getFullYear();
+    const m = String(parsed.getMonth() + 1).padStart(2, '0');
+    const d = String(parsed.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
   }
   return str;
 }
@@ -164,8 +175,13 @@ export function parseSewingPlanWorkbook(workbook: XLSX.WorkBook): {
   totalSkipped: number;
 } {
   // Find the best sheet — prefer a "sewing plan" named sheet, avoid summary/pivot/SAH
-  let sheetName = workbook.SheetNames.find((name) => name.toLowerCase() === 'sheet1');
+  let sheetName = workbook.SheetNames.find((name) => {
+    const lower = name.toLowerCase();
+    return (lower.includes('sewing') || lower.includes('plan')) && !lower.includes('summary');
+  });
+
   if (!sheetName) {
+    // Fallback: Pick the first sheet that isn't a known bad name
     sheetName = workbook.SheetNames.find((name) => {
       const lower = name.toLowerCase();
       return (
@@ -175,7 +191,7 @@ export function parseSewingPlanWorkbook(workbook: XLSX.WorkBook): {
         !lower.includes('sheet2') &&
         !lower.includes('sheet3')
       );
-    }) || workbook.SheetNames[0];
+    }) || workbook.SheetNames[0]; // Absolute fallback
   }
 
   const worksheet = workbook.Sheets[sheetName];
